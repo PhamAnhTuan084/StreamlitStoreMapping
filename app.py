@@ -598,7 +598,7 @@ def tao_address(data):
 
     data['Address'] = data['result'] + data['WardName'] + data['DistrictName'] + data['ProvinceName']
 
-    Op = pd.read_excel("C:/Users/PHAMT16/Desktop/StoreMappingApp/Op_Text_vigo.xlsx")
+    Op = pd.read_excel("Op_Text_vigo.xlsx")
 
     Op['Replace'].fillna('', inplace=True)
     Op['Replace'].replace({None: ''}, inplace=True)
