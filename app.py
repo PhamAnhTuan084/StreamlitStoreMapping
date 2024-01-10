@@ -689,46 +689,71 @@ def calculate_distance(point1, point2):
     # point1 và point2 là tuple (latitude, longitude)
     return geodesic(point1, point2).meters
 
-def apply_filter(row):
-    ward_name = row['ward']
-    district_name = row['district']
-    province_name = row['province']
-    distance = row['distance']
-
-    if 'Phường' in ward_name and 'Thành phố' in district_name and 'Tỉnh' in province_name:
-        return distance <= 5
-    elif 'Xã' in ward_name and 'Thành phố' in district_name and 'Tỉnh' in province_name:
-        return distance <= 10
-    elif 'Thị trấn' in ward_name and 'Thành phố' in district_name and 'Tỉnh' in province_name:
-        return distance <= 15
-    elif 'Phường' in ward_name and 'Huyện' in district_name and 'Tỉnh' in province_name:
-        return distance <= 10
-    elif 'Xã' in ward_name and 'Huyện' in district_name and 'Tỉnh' in province_name:
-        return distance <= 15
-    elif 'Thị trấn' in ward_name and 'Huyện' in district_name and 'Tỉnh' in province_name:
-        return distance <= 20
-    else:
-        # Nếu không phải các trường hợp trên, không áp dụng lọc
-        return True
-
 def calc_score_name_2(df):
     return fuzz.token_set_ratio(df['clean_Outlet_Name_file1'], df['clean_Outlet_Name_file2'])
 
+def apply_filter(row):
+    ward_name = row['WardName']
+    district_name = row['DistrictName']
+    province_name = row['ProvinceName']
+    distance = row['distance']
+
+    if 'phường' in ward_name and 'thành phố' in district_name and 'tỉnh' in province_name:
+        return distance <= 15
+    elif 'xã' in ward_name and 'thành phố' in district_name and 'tỉnh' in province_name:
+        return distance <= 15
+    elif 'thị trấn' in ward_name and 'thành phố' in district_name and 'tỉnh' in province_name:
+        return distance <= 15
+    elif 'phường' in ward_name and 'huyện' in district_name and 'tỉnh' in province_name:
+        return distance <= 20
+    elif 'xã' in ward_name and 'huyện' in district_name and 'tỉnh' in province_name:
+        return distance <= 20
+    elif 'thị trấn' in ward_name and 'huyện' in district_name and 'tỉnh' in province_name:
+        return distance <= 20
+    elif 'phường' in ward_name and 'thị xã' in district_name and 'tỉnh' in province_name:
+        return distance <= 20
+    elif 'xã' in ward_name and 'thị xã' in district_name and 'tỉnh' in province_name:
+        return distance <= 20
+    elif 'xã' in ward_name and 'huyện' in district_name and 'thành phố' in province_name:
+        return distance <= 15
+    elif 'phường' in ward_name and 'quận' in district_name and 'thành phố' in province_name:
+        return distance <= 10
+    elif 'xã' in ward_name and 'huyện' in district_name and 'thành phố' in province_name:
+        return distance <= 10
+    elif 'thị trấn' in ward_name and 'huyện' in district_name and 'thành phố' in province_name:
+        return distance <= 15
+    elif 'phường' in ward_name and 'thành phố' in district_name and 'thành phố' in province_name:
+        return distance <= 10
+    elif 'phường' in ward_name and 'thị xã' in district_name and 'thành phố' in province_name:
+        return distance <= 15
+    elif 'xã' in ward_name and 'thị xã' in district_name and 'thành phố' in province_name:
+        return distance <= 15   
+    elif 'xã' in ward_name and 'huyện' in district_name and 'city' in province_name:
+        return distance <= 15
+    elif 'phường' in ward_name and 'quận' in district_name and 'city' in province_name:
+        return distance <= 10
+    elif 'xã' in ward_name and 'huyện' in district_name and 'city' in province_name:
+        return distance <= 15
+    elif 'thị trấn' in ward_name and 'huyện' in district_name and 'city' in province_name:
+        return distance <= 15
+    elif 'phường' in ward_name and 'thành phố' in district_name and 'city' in province_name:
+        return distance <= 10
+    elif 'phường' in ward_name and 'thị xã' in district_name and 'city' in province_name:
+        return distance <= 15
+    elif 'xã' in ward_name and 'thị xã' in district_name and 'city' in province_name:
+        return distance <= 15    
+    else:
+        return True
+    
 def round4(HVN_r4, Vigo_r4):
     merged_df = pd.merge(HVN_r4, Vigo_r4, on=['ProvinceName', 'DistrictName', 'WardName'], how='inner', suffixes=('_file1', '_file2'))
-    
-    # Thêm cột mới 'distance' vào DataFrame
     merged_df['distance'] = merged_df.apply(lambda row: calculate_distance((row['Latitude_file1'], row['Longitude_file1']),
                                                                  (row['Latitude_file2'], row['Longitude_file2'])), axis=1)
     
-    merged_df['province'] = 'Tỉnh ' + merged_df['province']
     filtered_result = merged_df[merged_df.apply(apply_filter, axis=1)]
-    
     filtered_result['Score_Name_2'] = filtered_result.apply(calc_score_name_2, axis=1)
-    
     storename80 = filtered_result.loc[filtered_result['Score_Name_2'] >= 80]
-    
-    return storename80
+    return filtered_result
 
 def process_uploaded_files(uploaded_files):
     dataframes = {}
@@ -775,11 +800,11 @@ def main():
 
         # Display information for HVN and Vigo
         if HVN is not None:
-            st.subheader("Displaying HVN:")
+            st.subheader("Displaying file 1:")
             st.dataframe(HVN)
 
         if Vigo is not None:
-            st.subheader("Displaying Vigo:")
+            st.subheader("Displaying file 2:")
             st.dataframe(Vigo)
 
     # Display Round table
@@ -828,10 +853,21 @@ def main():
             HVN = xuly_hvnname(HVN, remove_name)
             Vigo = xuly_hvnname(Vigo, remove_name_2)
 
+            st.subheader("After Cleaning Name's file 1:")
+            st.dataframe(HVN)
+            st.subheader("After Cleaning Name's file 2:")
+            st.dataframe(Vigo)
+
             st.text("Đang xử lý Phone")
             HVN_nophone, Vigo_nophone, HVN_phone_na, HVN_phone_notna, Vigo_phone_na, Vigo_phone_notna = xuly_phone(HVN, Vigo)
             HVN_thoa, HVN_khongthoa, Vigo_thoa, Vigo_khongthoa = tao_danh_sach_thoa_khongthoa(teleco1, teleco2, HVN_phone_notna, Vigo_phone_notna, HVN_nophone, HVN_phone_na, Vigo_nophone, Vigo_phone_na)
+
+            st.subheader("After Cleaning Phone's file 1:")
+            st.dataframe(HVN_thoa)
+            st.subheader("After Cleaning Phone's file 2:")
+            st.dataframe(Vigo_thoa)
             phonenum_map = round1(HVN_thoa, Vigo_thoa)
+
             st.subheader("Displaying round 1:")
             st.dataframe(phonenum_map)
             
@@ -880,6 +916,17 @@ def main():
             storename80 = round4(HVN_r4, Vigo_r4)
             st.subheader("Displaying round 4:")
             st.dataframe(storename80)
+
+            phonenum_map['level'] = 1
+            matching_addess['level'] = 2
+            location90storename100['level'] = 3
+            storename80['level'] = 4
+
+            df = pd.concat([phonenum_map, matching_addess])
+            df = pd.concat([df, location90storename100])
+            df = pd.concat([df, storename80])
+            st.subheader("Summary for 4 rounds:")
+            st.dataframe(df)
 
 if __name__ == '__main__':
     main()
