@@ -1032,7 +1032,7 @@ def main():
             st.subheader("Displaying file 1 after crearting address:")
             st.dataframe(df3)
             
-            st.subheader("Displaying file 2 after cleaning address:")
+            st.subheader("Displaying file 2 after crearting address:")
             st.dataframe(df4)  
             print(df3.info())
             print(df4.info())      
