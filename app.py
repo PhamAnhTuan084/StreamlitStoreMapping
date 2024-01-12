@@ -1019,7 +1019,7 @@ def main():
                 Vigo_r4= Vigo_r3_without_NoName
             else:
                 # Lọc data cho round 4
-                HVN_r4 = Vigo_r3_without_NoName.loc[lambda df: ~df.OutletID.isin(location90storename100.OutletID_file1)]
+                HVN_r4 = HVN_r3_without_NoName.loc[lambda df: ~df.OutletID.isin(location90storename100.OutletID_file1)]
                 Vigo_r4 = Vigo_r3_without_NoName.loc[lambda df: ~df.OutletID.isin(location90storename100.OutletID_file2)]
             # print(HVN_r4.info())
             # print(Vigo_r4.info())
