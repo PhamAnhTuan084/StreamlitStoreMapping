@@ -95,6 +95,19 @@ def xet_phancap(hvn_df, province_df):
 
     return invalid_outlets_df
 
+def read_file():
+    Province = pd.read_excel("Province.xlsx")
+    teleco1 = pd.read_excel("Teleco Master 202307.xlsx", sheet_name='Di động')
+    teleco2= pd.read_excel("Teleco Master 202307.xlsx", sheet_name='Cố định')
+    OptionalText = pd.read_excel("Op_Add.xlsx")
+    text_remove = pd.read_excel("remove_list_hvn.xlsx")        
+    text_remove_2 = pd.read_excel("remove_list_vigo.xlsx")
+    remove_name = pd.read_excel("remove_listname_hvn.xlsx")
+    remove_name_2 = pd.read_excel("remove_listname_vigo.xlsx")
+
+    return Province, teleco1, teleco2, OptionalText, text_remove, text_remove_2, remove_name, remove_name_2
+
+
 #clean phone numbers
 def clean_phone_data(orig_phone):
     try:
@@ -112,7 +125,6 @@ def remove_invalid_phone(df_column):
                   df_column = df_column.replace([num], new_num)
     return df_column
 
-# Lấy ra những dòng có số đt và không có số đt
 def xuly_phone(HVN, Vigo):
     HVN['Phone'] = HVN['Phone'].apply(lambda x: str(x) if type(x) is not str else x)
     Vigo['Phone'] = Vigo['Phone'].apply(lambda x: str(x) if type(x) is not str else x)
@@ -135,6 +147,9 @@ def xuly_phone(HVN, Vigo):
     # Thay thế các số điện thoại bắt đầu bằng "+84" thành "0" trong cột 'Phone'
     HVN_phone['Phone'] = HVN_phone['Phone'].replace(to_replace=r'^\+84', value='0', regex=True)
 
+    # In ra DataFrame sau khi thay đổi
+    # print(HVN_phone['Phone'].value_counts())
+
     # Loại bỏ giá trị trùng lặp từ cột 'Phone'
     HVN_phone['Phone'] = HVN_phone['Phone'].drop_duplicates()
     HVN_phone_na = HVN_phone[HVN_phone['Phone'].isna()]
@@ -147,7 +162,6 @@ def xuly_phone(HVN, Vigo):
 
     return HVN_nophone, Vigo_nophone, HVN_phone_na, HVN_phone_notna, Vigo_phone_na, Vigo_phone_notna
 
-# Kiểm tra đầu số điền thoại có đúng các nhà mạng hay mã vùng mới nhất. Nếu còn dùng đầu số cũ thì thay đầu số mới
 def check_dausomoi(HVN_phone_notna, teleco1):
     matched_rows = []
     not_matching_rows = []
@@ -196,7 +210,6 @@ def check_dausomoi(HVN_phone_notna, teleco1):
     
     return matched_df, not_matching_df
 
-# Kiểm tra đầu số điền thoại có đúng các nhà mạng hay mã vùng mới nhất. Nếu còn dùng đầu số cũ thì thay đầu số mới
 def check_mavungmoi(HVN_phone_notna_2, teleco2):
     # Clear any existing rows in matched_df_2 and not_matching_df_2
     matched_rows_2 = []
@@ -246,7 +259,6 @@ def check_mavungmoi(HVN_phone_notna_2, teleco2):
 
     return matched_df_2, not_matching_df_2
 
-# Lọc tạo danh sách thỏa và không thỏa số điện thoại
 def tao_danh_sach_thoa_khongthoa(teleco1, teleco2, HVN_phone_notna, Vigo_phone_notna, HVN_nophone, HVN_phone_na, Vigo_nophone, Vigo_phone_na):
     teleco1['Đầu Số Cũ'] = '0' + teleco1['Đầu Số Cũ'].astype(str)
     teleco1['Đầu Số Mới'] = '0' + teleco1['Đầu Số Mới'].astype(str)
@@ -270,6 +282,331 @@ def tao_danh_sach_thoa_khongthoa(teleco1, teleco2, HVN_phone_notna, Vigo_phone_n
     Vigo_thoa = pd.concat([Vigo_dausomoi, Vigo_mavungmoi])
 
     return HVN_thoa, HVN_khongthoa, Vigo_thoa, Vigo_khongthoa
+
+def round1(HVN_thoa, Vigo_thoa):
+    if (len(HVN_thoa['Phone'].unique()) < len(Vigo_thoa['Phone'].unique())):
+        phone_list = HVN_thoa['Phone'].unique().tolist() 
+    else:
+        phone_list = Vigo_thoa['Phone'].unique().tolist()
+    
+    phonenum_map = pd.DataFrame()
+    for phone_num in tqdm(phone_list):
+        Data_df_phone = HVN_thoa[HVN_thoa['Phone'] == phone_num]
+        VIGO_df_phone = Vigo_thoa[Vigo_thoa['Phone'] == phone_num]
+        
+        Data_df_phone['key'] = 1
+        VIGO_df_phone['key'] = 1
+        df_merged_by_phone = pd.merge(Data_df_phone, VIGO_df_phone, on='key', suffixes=('_file1', '_file2'))
+        del df_merged_by_phone['key']
+        phonenum_map = pd.concat([phonenum_map, df_merged_by_phone])
+    
+    return phonenum_map
+
+def is_valid_format(address):
+    parts = address.split(', ')
+    if len(parts) == 2:
+        first_part = parts[0].split(' ')
+        if len(first_part) >= 2 and first_part[1] == 'ấp' and 'thị trấn' in parts[1]:
+            return True
+    return False
+
+def is_valid_format_1(address):
+    if pd.isna(address):
+        return False
+    pattern = re.compile(r'\b\d+[a-zA-Z]*\s*ấp[^\d,]+\b')
+    match = pattern.match(address)
+    return bool(match and match.group(0) == address)
+
+def is_valid_format_2(address):
+    if pd.isna(address):
+        return False
+    pattern = re.compile(r'\b\d+\s*kênh xáng,\s*ấp (\d+),\s*xã (\D+)')
+    match = pattern.match(address)
+    return bool(match and match.group(1) and match.group(2))
+
+def is_valid_format_3(address):
+    if pd.isna(address):
+        return False
+    pattern = re.compile(r'\b30 cầu đường bàng,\s*xã (\D+)')
+    match = pattern.match(address)
+    return bool(match and match.group(1))
+
+def is_valid_format_4(address):
+    if pd.isna(address):
+        return False
+    pattern = re.compile(r'\b29 thuận hòa')
+    return bool(re.match(pattern, address))
+
+def is_valid_format_5(address):
+    if pd.isna(address):
+        return False
+    pattern = re.compile(r'\b(\d+\s*hòa lạc c)\s*,\s*Xã (\D+)')
+    return bool(re.match(pattern, address))
+
+def is_valid_format_6(address):
+    if pd.isna(address):
+        return False
+    pattern = re.compile(r'\b(\d+\s*cây khô lớn)\s*,\s*xã (\D+)')
+    return bool(re.match(pattern, address))
+
+def loc_hvn_r2(HVN_r2):
+    HVN_r2['WardName'].fillna('', inplace=True)
+    HVN_r2['WardName'].replace({None: ''}, inplace=True)
+    HVN_r2['WardName'].replace({'NULL': ''}, inplace=True)
+    HVN_r2['CustomerAddress'].fillna('', inplace=True)
+    HVN_r2['CustomerAddress'].replace({None: ''}, inplace=True)
+    HVN_r2['CustomerAddress'].replace({'NULL': ''}, inplace=True)
+    HVN_r2['CustomerAddress'] = HVN_r2['CustomerAddress'].str.strip()
+    HVN_r2['DistrictName'].fillna('', inplace=True)
+    HVN_r2['DistrictName'].replace({None: ''}, inplace=True)
+    HVN_r2['DistrictName'].replace({'NULL': ''}, inplace=True)
+    HVN_r2['OutletName'].fillna('', inplace=True)
+    HVN_r2['OutletName'].replace({None: ''}, inplace=True)
+    HVN_r2['OutletName'].replace({'NULL': ''}, inplace=True)
+    HVN_r2['CustomerAddress'].fillna('', inplace=True)
+    HVN_r2['CustomerAddress'].replace({None: ''}, inplace=True)
+    HVN_r2['CustomerAddress'].replace({'NULL': ''}, inplace=True)
+    HVN_r2['CustomerAddress'] = HVN_r2['CustomerAddress'].str.strip()
+    HVN_r2['CustomerAddress'] = HVN_r2['CustomerAddress'].str.lower()
+
+    HVN_digit_mask = HVN_r2[HVN_r2['CustomerAddress'].str.match(r'^\d')]
+    HVN_notdigit_mask = HVN_r2[~HVN_r2['CustomerAddress'].str.match(r'^\d')]
+
+    word_list = [
+        'đường', ' đường', ' hương lộ', 'đ\\.', 'd\\.', 'bình thành','ngô y linh','an dương vương','phạm đăng giãng','phạm bành', 'đinh nghị xuân','đỗ năng tế','bùi hữu diện', 'đinh nghị xuân', 'đỗ năng tế', 'tây lân', 'bùi tư toàn','hoàng văn hợp', 'tỉnh lô', 'nguyễn triệu luật',  'nguyễn quý yêm', 'đỗ năng tế', 'trần đại nghĩa',  'bùi tư toàn', 'phùng tá chu', 'khiếu năng tĩnh', 'phan anh', 'nguyễn cửu phú', 'nguyễn quý yêm', 'trương thước phan', 'nguyễn thị tú', 'bình thành', 'bình long', 'hồ ngọc lãm', 'lê cơ', 'nguyễn thức tự','nguyễn văn cự', 'đình nghi xuân','lê tấn bê', 'lê trọng tấn','tân kỳ tân quý','kênh nước đen','số 4','827', 'kinh dương vương','trần văn giàu', 'bùi dương lịch', 'gò xoài', 'số 8b','số 1a','lê văn quới','lê đình cẩn', 'hồ học lãm', 'lô tư', 'bình trị đông', 'hồ văn long','liên khu', 'trần đại nghĩa', 'hồ văn long','phạm đăng giảng','miếu gò xoài','miếu gò xoài', '26/3', '26 tháng 3','liên khu 5 6', 'liên khu 5-6','ao đôi', 'miếu bình đông','trần thanh mại','trần thành đại', 'n27', 'nguyễn văn nhân','huỳnh văn thanh', 'võ văn thành', 'nguyễn hoà luông', 'mai thị non', 'lương văn bang', 'truong binh - phuoc lâm', 'lộ 837', 'huỳnh thị mai', 'đường 836','tiên đông thượng', 'lộ tránh', 'công lý', 'ban cao', 'caovăn lầu', 'bạch đằng', 'lộ thầy cai', 'bình an', 'nguyễn công truc', 'long khốt', 'duong', 'duong', 'bà chánh thâu','trần ngọc giải', 'dương văn dương', 'đ12', 'lê văn sáu', 'nguyễn văn tư', 'lê văn tám', 'đt', 'nguyễn đình chiểu', 'trương văn kỉnh', 'tiền phong', 'tô thị huỳnh', 'đặng ngọc sương', 'phan đình phùng', 'lê văn khuyên', 'nguyễn văn tiếp', 'nguyễn văn cương', 'lê văn tường', 'võ văn môn', 'lê lợi', 'nguyễn trãi', 'hùng vương', 'nguyễn thị nhỏ', 'nguyễn thị bảy', 'nguyễn chí thanh', 'thống chế sỹ', 'phạm văn thành', 'huynh chau so', 'huỳnh châu sổ', 'nguyễn đình chiểu', 'đỗ tường phong', 'sơn thông', 'đỗ trình thoại', 'nguyễn thông', 'lãnh binh thái', 'phạm văn thành', 'trần công oanh', 'đồng khởi', 'châu thị kim', 'lê văn tưởng', 'phạm ngũ lão', 'nguyễn văn trổi', 'nguyễn thái bình', 'hoàng hoa thám', 'đặng văn truyện', 'huỳnh văn đảnh', 'nguyễnvăn trưng', 'vành đai', 'nguyen thong', 'phú hoà', 'phan đình phùng', 'hoà hảo', 'tiền phong', 'nguyễn thông', 'nguyen trung truc', 'trương định', 'nguyễn thị định', 'nguyễn văn nhâm', 'ql', 'ql', 'ba sa gò mối', 'mỹ thuận', 'bùi hữu nghĩa', 'châu thị kim', 'cử luyện', 'nguyễn huệ', 'hoàng hoa thám', 'nguyễn văn tư', 'nguyễn huệ', 'đoàn hoàng minh', 'phan văn mảng', 'đồng khởi', 'nguyễn văn tuôi', 'tán kế', 'luu van te', 'châu thị kim', 'trần văn đấu', 'quách văn tuấn', 'sương nguyệt ánh', 'châu văn bảy', 'nguyễn trung trực', 'nguyễn văn cánh', 'nguyễn minh đường', 'nguyễn thị hạnh', 'đỗ đình thoại', 'nguyễn du', 'châu thị kim', 'trương vĩnh ký', 'nguyen thi dinh', 'hồ văn huê', 'nguyễn đáng', 'vĩnh phú', 'châu thị kim', 'đoàn hoàng minh', 'huỳnh việt thanh', 'nguyễn hữu thọ', 'luong van chan', 'phan đình phùng', 'phạm văn ngô', 'nguyen thong', 'đương 30/4', 'cmt8', 'cmt8', 'huỳnh tấn phát', 'hương lộ', 'hl', 'trần văn đạt', 'quốc lộ', 'tỉnh lộ', 'dt', 'dt', 'nguyễn an ninh', 'lê hồng phong', 'lộc trung', 'lê minh xuân', 'mai thị tốt', 'phạm văn ngô', 'tl', 'lê thị trâm', 'quoc lo', 'tỉnh lộ', 'nguyễn thị minh khai', 'phạm văn chiên', 'võ văn nhơn', 'lê hữu nghĩa', 'phan văn lay', 'châu văn giác', 'nguyễn huỳnh đức', 'phan văn mãng', 'bùi tấn', 'lưu nghiệp anh', 'lê hồng phong', 'nguyễn văn siêu', 'nguyễn văn quá', 'vo cong ton', 'thái hữu kiểm', 'trần minh châu', 'lý thường kiệt', 'phạm văn ngũ', 'trần phong sắc', 'nguyễn văn kỉnh', '827d', 'phan văn mãng', 'nguyễn cửu vân', 'bùi thị hồng', 'trần thế sinh', 'hoàng anh', 'huỳnh văn tạo', 'nguyễn văn trung', 'đỗ tường tự', 'nguyễn văn trưng', 'tl', 'đt', 'trần phú', 'nguyễn thị diện', '19/5', 'hl', 'nguyễn văn tiến', 'phan van lay', 'nguyen thi minh khai', 'đỗ tường tự', 'thủ khoa huân', 'thanh hà', 'tân long', 'truong bình', 'huỳnh thị lung', ' phan thanh giảng', ' phan thanh giảnp', 'đinh viết cừu', 'võ nguyên giáp', 'lộ dừa', 'truong vinh ky', 'phan văn tình', 'trịnh quang nghị', 'nguyễn minh trung', 'ca văn thỉnh', 'bàu sen', 'chu văn an', 'trần thị non', 'lê lợi', 'võ công tồn', 'nguyễntrung trực', 'phan van mang', 'phan văn mảng', 'phan văn mãng', 'nguyễn hòa luông', 'nguyễn văn trỗi', 'võ văn kiệt', 'huỳnh văn gấm', 'thanh hà', 'hòa lạc c', 'phạm văn ngô', 'phạm văn ngô', 'phước toàn', 'vỏ duy tạo', 'lảnh binh thái', 'nguyen cuu van', 'trần phú', 'cao văn lầu', 'điện biên phủ', 'bạch đằng' 'huỳnh văn thanh', 'võ văn tần', 'phan văn tình', 'chu van an', 'thuận hòa', 'vũ đình liệu', 'đồng văn dẫn', 'mậu thân', 'cao thị mai', 'nguyễn văn rành', 'nguyễn công trung', 'nguyễn minh trường', 'nguyễn quang đại', 'hai bà trưng', 'võ thị sáu', 'trần quốc tuấn', 'lê văn kiệt', 'nguyễn văn tạo', '30 tháng 4', '3/2', 'phan đình phùng', 'thủ khoa huân', 'phan văn tình', 'hoàng lam', 'ngô quyền', 'nguyễn thị bẹ', 'phan văn đạt', 'nguyễn minh trường', 'võ công tồn', 'huỳnh văn gấm', 'huỳnh văn lộng', 'bình hòa', 'nguyen huu tho', 'nguyễn hữu thọ', 'võ công tồn', 'trần phong sắc', 'trần phong sẳ', 'phạm ngọc tòng', 'phan văn tình', 'trần hưng đạo', 'nguyễn văn rành', 'nguyễn văn cảnh', 'thủ khoa thừa', 'lê thị điền', 'rạch tre', 'trần hưng dạo', 'võ công tồn', 'võ hồng cúc', 'lê văn kiệt', 'phạm văn trạch', 'lê văn tao', 'nguyễn thiện thành', 'huỳnh hữu thống', '2 tháng 9', 'phan châu trinh', 'hoàng lam', 'trần văn trà', 'nguyễn thị út', 'nguyễn thị út', 'bình trị 2', 'lê văn trần', 'trưng nhị', 'bình hòa', 'nguyễn đìnhchiểu', 'hương lộ', 'nguyen thi bay', 'nguyễn thị bảy', 'đt 816', 'huỳnh văn đảnh', 'huỳnh văn đảnh', 'nguyễn văn tiếp', 'nguyễn văn tiếp', 'cao thi mai', 'đt825', 'đặng văn búp', '30 thang 4', 'nguyễn bỉnh khiêm', 'đt 835b'
+    ]
+
+    pattern = '|'.join(word_list)
+
+    df_filtered = HVN_digit_mask[HVN_digit_mask['CustomerAddress'].str.contains(pattern, regex=True)]
+    df_notfiltered = HVN_digit_mask[~HVN_digit_mask['CustomerAddress'].str.contains(pattern, regex=True)]
+
+    regex_pattern = r'\b\d+ ấp [^\d]+, xã \w+\b'
+
+    ap_ten = df_filtered[df_filtered['CustomerAddress'].str.contains(regex_pattern, regex=True, case=False)]
+    non_ap_ten = df_filtered.loc[~df_filtered['CustomerAddress'].str.contains(regex_pattern, regex=True, case=False)]
+    so_ap = non_ap_ten[non_ap_ten['CustomerAddress'].str.match(r'^\d+ ấp [^qlhlđthldlt]+\b(?:(?!ql|hl|đt|hương lộ|ql|tl|tl|dt|quốc lộ|tỉnh lộ|đinh viết cừu|nguyễn thông).)*$')]
+    noso_ap = non_ap_ten[~non_ap_ten['CustomerAddress'].str.match(r'^\d+ ấp [^qlhlđthldlt]+\b(?:(?!ql|hl|đt|hương lộ|ql|tl|tl|dt|quốc lộ|tỉnh lộ|đinh viết cừu|nguyễn thông).)*$')]
+    ap = noso_ap[noso_ap['CustomerAddress'].str.match(r'^\d+ ấp (?!.*\b(ql|hl|đt|hương lộ|ql|tl|tl|dt|quốc lộ|tỉnh lộ)\b)[^\d]+(\s+\d+)?$')]
+    no_ap = noso_ap[~noso_ap['CustomerAddress'].str.match(r'^\d+ ấp (?!.*\b(ql|hl|đt|hương lộ|ql|tl|tl|dt|quốc lộ|tỉnh lộ)\b)[^\d]+(\s+\d+)?$')]
+    xa = no_ap[noso_ap['CustomerAddress'].str.match(r'^\d+ xã (?!.*\b(ql|hl|đt|hương lộ|ql|tl|tl|dt|quốc lộ|tỉnh lộ)\b)[^\d]+(\s+\d+)?$')]
+    no_xa = no_ap[~no_ap['CustomerAddress'].str.match(r'^\d+ xã (?!.*\b(ql|hl|đt|hương lộ|ql|tl|tl|dt|quốc lộ|tỉnh lộ)\b)[^\d]+(\s+\d+)?$')]
+    ap2 = no_xa[no_xa['CustomerAddress'].str.match(r'\d+/[^ ]+ ấp [^,]+')]
+    no_ap2 = no_xa[~no_xa['CustomerAddress'].str.match(r'\d+/[^ ]+ ấp [^,]+')]
+    xa2 = no_ap2[no_ap2['CustomerAddress'].str.match(r'\d+/[^ ]+ xã [^,]+')]
+    no_xa2 = no_ap2[~no_ap2['CustomerAddress'].str.match(r'\d+/[^ ]+ xã [^,]+')]
+    ap_thitran = no_xa2[no_xa2['CustomerAddress'].apply(is_valid_format)]
+    noap_thitran = no_xa2[~no_xa2['CustomerAddress'].apply(is_valid_format)]
+    ap_df = noap_thitran[noap_thitran['CustomerAddress'].apply(lambda x: is_valid_format_1(x) if not pd.isna(x) else False)]
+    no_ap_df = noap_thitran[~noap_thitran['CustomerAddress'].apply(lambda x: is_valid_format_1(x) if not pd.isna(x) else False)]
+    ap_df_2 = no_ap_df[no_ap_df['CustomerAddress'].str.match(r'^\d+ ap [^qlhlđthldlt]+\b(?:(?!ql|hl|đt|hương lộ|ql|tl|tl|dt|quốc lộ|tỉnh lộ|đinh viết cừu|nguyễn thông).)*$')]
+    no_ap_df_2 = no_ap_df[~no_ap_df['CustomerAddress'].str.match(r'^\d+ ap [^qlhlđthldlt]+\b(?:(?!ql|hl|đt|hương lộ|ql|tl|tl|dt|quốc lộ|tỉnh lộ|đinh viết cừu|nguyễn thông).)*$')]
+    kenhxang = no_ap_df_2[no_ap_df_2['CustomerAddress'].apply(lambda x: is_valid_format_2(x) if not pd.isna(x) else False)]
+    no_kenhxang = no_ap_df_2[~no_ap_df_2['CustomerAddress'].apply(lambda x: is_valid_format_2(x) if not pd.isna(x) else False)]
+    cauduongbang = no_kenhxang[no_kenhxang['CustomerAddress'].apply(lambda x: is_valid_format_3(x) if not pd.isna(x) else False)]
+    no_cauduongbang = no_kenhxang[~no_kenhxang['CustomerAddress'].apply(lambda x: is_valid_format_3(x) if not pd.isna(x) else False)]
+    thuanhoa = no_cauduongbang[no_cauduongbang['CustomerAddress'].apply(lambda x: is_valid_format_4(x) if not pd.isna(x) else False)]
+    no_thuanhoa = no_cauduongbang[~no_cauduongbang['CustomerAddress'].apply(lambda x: is_valid_format_4(x) if not pd.isna(x) else False)]
+    hoa_lac_c = no_thuanhoa[no_thuanhoa['CustomerAddress'].apply(lambda x: is_valid_format_5(x) if not pd.isna(x) else False)]
+    no_hoa_lac_c = no_thuanhoa[~no_thuanhoa['CustomerAddress'].apply(lambda x: is_valid_format_5(x) if not pd.isna(x) else False)]
+    
+    pattern = re.compile(r'\b695/4 bình trị 2, xã thuận mỹ\b')
+
+    binhtri = no_hoa_lac_c[no_hoa_lac_c['CustomerAddress'].str.contains(pattern, na=False, regex=True)]
+    no_binhtri = no_hoa_lac_c[~no_hoa_lac_c['CustomerAddress'].str.contains(pattern, na=False, regex=True)]
+    caykho = no_binhtri[no_binhtri['CustomerAddress'].apply(lambda x: is_valid_format_6(x) if not pd.isna(x) else False)]
+    no_caykho = no_binhtri[~no_binhtri['CustomerAddress'].apply(lambda x: is_valid_format_6(x) if not pd.isna(x) else False)]
+
+    pattern = re.compile(r'\b(bình an)\s*,\s*xã (\S+)\b')
+
+    binhan = no_caykho[no_caykho['CustomerAddress'].str.contains(pattern, na=False, regex=True)]
+    no_binhan = no_caykho[~no_caykho['CustomerAddress'].str.contains(pattern, na=False, regex=True)]
+
+    df_khongthoa = pd.concat([HVN_notdigit_mask, df_notfiltered])
+    df_khongthoa = pd.concat([df_khongthoa, ap_ten])
+    df_khongthoa = pd.concat([df_khongthoa, so_ap])
+    df_khongthoa = pd.concat([df_khongthoa, ap])
+    df_khongthoa = pd.concat([df_khongthoa, xa])
+    df_khongthoa = pd.concat([df_khongthoa, ap2])
+    df_khongthoa = pd.concat([df_khongthoa, xa2])
+    df_khongthoa = pd.concat([df_khongthoa, ap_thitran])
+    df_khongthoa = pd.concat([df_khongthoa, ap_df])
+    df_khongthoa = pd.concat([df_khongthoa, ap_df_2])
+    df_khongthoa = pd.concat([df_khongthoa, kenhxang])
+    df_khongthoa = pd.concat([df_khongthoa, cauduongbang])
+    df_khongthoa = pd.concat([df_khongthoa, thuanhoa])
+    df_khongthoa = pd.concat([df_khongthoa, hoa_lac_c])
+    df_khongthoa = pd.concat([df_khongthoa, binhtri])
+    df_khongthoa = pd.concat([df_khongthoa, caykho])
+    df_khongthoa = pd.concat([df_khongthoa, binhan])
+
+    pattern = re.compile(r'\b19 nguyễn văn nhân, xã thanh phú\b')
+
+    nguyennhan = df_khongthoa[df_khongthoa['CustomerAddress'].str.contains(pattern, na=False, regex=True)]
+    no_nguyennhan = df_khongthoa[~df_khongthoa['CustomerAddress'].str.contains(pattern, na=False, regex=True)]
+
+    word_list = [
+        'đường', ' đường', ' hương lộ', 'đ\\.', 'd\\.', 'bình thành', 'phạm bành', 'ngô y linh','an dương vương','phạm đăng giãng', 'đinh nghị xuân','đỗ năng tế','bùi hữu diện', 'đinh nghị xuân', 'đỗ năng tế', 'tây lân', 'bùi tư toàn','hoàng văn hợp', 'tỉnh lô', 'nguyễn triệu luật',  'nguyễn quý yêm', 'đỗ năng tế', 'trần đại nghĩa',  'bùi tư toàn', 'phùng tá chu', 'khiếu năng tĩnh', 'phan anh', 'nguyễn cửu phú', 'nguyễn quý yêm', 'trương thước phan', 'nguyễn thị tú', 'bình thành', 'bình long', 'hồ ngọc lãm', 'lê cơ', 'nguyễn thức tự','nguyễn văn cự', 'đình nghi xuân','lê tấn bê', 'lê trọng tấn','tân kỳ tân quý','kênh nước đen','số 4','827', 'kinh dương vương','trần văn giàu', 'bùi dương lịch', 'gò xoài', 'số 8b','số 1a','lê văn quới','lê đình cẩn', 'hồ học lãm', 'lô tư', 'bình trị đông', 'hồ văn long','liên khu', 'trần đại nghĩa', 'hồ văn long','phạm đăng giảng','miếu gò xoài','miếu gò xoài', '26/3', '26 tháng 3','liên khu 5 6', 'liên khu 5-6','ao đôi', 'miếu bình đông','trần thanh mại','trần thành đại', 'n27', 'nguyễn văn nhân','huỳnh văn thanh', 'võ văn thành', 'nguyễn hoà luông', 'mai thị non', 'lương văn bang', 'truong binh - phuoc lâm', 'lộ 837', 'huỳnh thị mai', 'đường 836','tiên đông thượng', 'lộ tránh', 'công lý', 'ban cao', 'caovăn lầu', 'bạch đằng', 'lộ thầy cai', 'bình an', 'nguyễn công truc', 'long khốt', 'duong', 'duong', 'bà chánh thâu','trần ngọc giải', 'dương văn dương', 'đ12', 'lê văn sáu', 'nguyễn văn tư', 'lê văn tám', 'đt', 'nguyễn đình chiểu', 'trương văn kỉnh', 'tiền phong', 'tô thị huỳnh', 'đặng ngọc sương', 'phan đình phùng', 'lê văn khuyên', 'nguyễn văn tiếp', 'nguyễn văn cương', 'lê văn tường', 'võ văn môn', 'lê lợi', 'nguyễn trãi', 'hùng vương', 'nguyễn thị nhỏ', 'nguyễn thị bảy', 'nguyễn chí thanh', 'thống chế sỹ', 'phạm văn thành', 'huynh chau so', 'huỳnh châu sổ', 'nguyễn đình chiểu', 'đỗ tường phong', 'sơn thông', 'đỗ trình thoại', 'nguyễn thông', 'lãnh binh thái', 'phạm văn thành', 'trần công oanh', 'đồng khởi', 'châu thị kim', 'lê văn tưởng', 'phạm ngũ lão', 'nguyễn văn trổi', 'nguyễn thái bình', 'hoàng hoa thám', 'đặng văn truyện', 'huỳnh văn đảnh', 'nguyễnvăn trưng', 'vành đai', 'nguyen thong', 'phú hoà', 'phan đình phùng', 'hoà hảo', 'tiền phong', 'nguyễn thông', 'nguyen trung truc', 'trương định', 'nguyễn thị định', 'nguyễn văn nhâm', 'ql', 'ql', 'ba sa gò mối', 'mỹ thuận', 'bùi hữu nghĩa', 'châu thị kim', 'cử luyện', 'nguyễn huệ', 'hoàng hoa thám', 'nguyễn văn tư', 'nguyễn huệ', 'đoàn hoàng minh', 'phan văn mảng', 'đồng khởi', 'nguyễn văn tuôi', 'tán kế', 'luu van te', 'châu thị kim', 'trần văn đấu', 'quách văn tuấn', 'sương nguyệt ánh', 'châu văn bảy', 'nguyễn trung trực', 'nguyễn văn cánh', 'nguyễn minh đường', 'nguyễn thị hạnh', 'đỗ đình thoại', 'nguyễn du', 'châu thị kim', 'trương vĩnh ký', 'nguyen thi dinh', 'hồ văn huê', 'nguyễn đáng', 'vĩnh phú', 'châu thị kim', 'đoàn hoàng minh', 'huỳnh việt thanh', 'nguyễn hữu thọ', 'luong van chan', 'phan đình phùng', 'phạm văn ngô', 'nguyen thong', 'đương 30/4', 'cmt8', 'cmt8', 'huỳnh tấn phát', 'hương lộ', 'hl', 'trần văn đạt', 'quốc lộ', 'tỉnh lộ', 'dt', 'dt', 'nguyễn an ninh', 'lê hồng phong', 'lộc trung', 'lê minh xuân', 'mai thị tốt', 'phạm văn ngô', 'tl', 'lê thị trâm', 'quoc lo', 'tỉnh lộ', 'nguyễn thị minh khai', 'phạm văn chiên', 'võ văn nhơn', 'lê hữu nghĩa', 'phan văn lay', 'châu văn giác', 'nguyễn huỳnh đức', 'phan văn mãng', 'bùi tấn', 'lưu nghiệp anh', 'lê hồng phong', 'nguyễn văn siêu', 'nguyễn văn quá', 'vo cong ton', 'thái hữu kiểm', 'trần minh châu', 'lý thường kiệt', 'phạm văn ngũ', 'trần phong sắc', 'nguyễn văn kỉnh', '827d', 'phan văn mãng', 'nguyễn cửu vân', 'bùi thị hồng', 'trần thế sinh', 'hoàng anh', 'huỳnh văn tạo', 'nguyễn văn trung', 'đỗ tường tự', 'nguyễn văn trưng', 'tl', 'đt', 'trần phú', 'nguyễn thị diện', '19/5', 'hl', 'nguyễn văn tiến', 'phan van lay', 'nguyen thi minh khai', 'đỗ tường tự', 'thủ khoa huân', 'thanh hà', 'tân long', 'truong bình', 'huỳnh thị lung', ' phan thanh giảng', ' phan thanh giảnp', 'đinh viết cừu', 'võ nguyên giáp', 'lộ dừa', 'truong vinh ky', 'phan văn tình', 'trịnh quang nghị', 'nguyễn minh trung', 'ca văn thỉnh', 'bàu sen', 'chu văn an', 'trần thị non', 'lê lợi', 'võ công tồn', 'nguyễntrung trực', 'phan van mang', 'phan văn mảng', 'phan văn mãng', 'nguyễn hòa luông', 'nguyễn văn trỗi', 'võ văn kiệt', 'huỳnh văn gấm', 'thanh hà', 'hòa lạc c', 'phạm văn ngô', 'phạm văn ngô', 'phước toàn', 'vỏ duy tạo', 'lảnh binh thái', 'nguyen cuu van', 'trần phú', 'cao văn lầu', 'điện biên phủ', 'bạch đằng' 'huỳnh văn thanh', 'võ văn tần', 'phan văn tình', 'chu van an', 'thuận hòa', 'vũ đình liệu', 'đồng văn dẫn', 'mậu thân', 'cao thị mai', 'nguyễn văn rành', 'nguyễn công trung', 'nguyễn minh trường', 'nguyễn quang đại', 'hai bà trưng', 'võ thị sáu', 'trần quốc tuấn', 'lê văn kiệt', 'nguyễn văn tạo', '30 tháng 4', '3/2', 'phan đình phùng', 'thủ khoa huân', 'phan văn tình', 'hoàng lam', 'ngô quyền', 'nguyễn thị bẹ', 'phan văn đạt', 'nguyễn minh trường', 'võ công tồn', 'huỳnh văn gấm', 'huỳnh văn lộng', 'bình hòa', 'nguyen huu tho', 'nguyễn hữu thọ', 'võ công tồn', 'trần phong sắc', 'trần phong sẳ', 'phạm ngọc tòng', 'phan văn tình', 'trần hưng đạo', 'nguyễn văn rành', 'nguyễn văn cảnh', 'thủ khoa thừa', 'lê thị điền', 'rạch tre', 'trần hưng dạo', 'võ công tồn', 'võ hồng cúc', 'lê văn kiệt', 'phạm văn trạch', 'lê văn tao', 'nguyễn thiện thành', 'huỳnh hữu thống', '2 tháng 9', 'phan châu trinh', 'hoàng lam', 'trần văn trà', 'nguyễn thị út', 'nguyễn thị út', 'bình trị 2', 'lê văn trần', 'trưng nhị', 'bình hòa', 'nguyễn đìnhchiểu', 'hương lộ', 'nguyen thi bay', 'nguyễn thị bảy', 'đt 816', 'huỳnh văn đảnh', 'huỳnh văn đảnh', 'nguyễn văn tiếp', 'nguyễn văn tiếp', 'cao thi mai', 'đt825', 'đặng văn búp', '30 thang 4', 'nguyễn bỉnh khiêm', 'đt 835b'
+    ]
+
+    pattern = '|'.join(word_list)
+    df_filtered_2 = no_nguyennhan[no_nguyennhan['CustomerAddress'].str.contains(pattern, regex=True)]
+    df_notfiltered_2 = no_nguyennhan[~no_nguyennhan['CustomerAddress'].str.contains(pattern, regex=True)]
+    df_thoa = pd.concat([no_binhan, nguyennhan])
+    df_thoa = pd.concat([df_thoa, df_filtered_2])
+    
+    return df_thoa, df_notfiltered_2
+
+def xuly_toadotrongaddress_vigo(Vigo_r2):
+    contains_plus = Vigo_r2[Vigo_r2['CustomerAddress'].str.contains('\\+')]
+    not_contains_plus = Vigo_r2[~Vigo_r2['CustomerAddress'].str.contains('\\+')]
+    contains_plus['plus_word'] = contains_plus['CustomerAddress'].str.extractall(r'(\S+\+\S+)').groupby(level=0).agg(','.join)[0]
+    contains_plus['CustomerAddress'] = contains_plus.apply(lambda row: row['CustomerAddress'].replace(row['plus_word'], ''), axis=1)
+    contains_plus = contains_plus.drop('plus_word', axis=1)    
+    vigo = pd.concat([contains_plus, not_contains_plus])
+
+    return vigo
+
+def convert_district(match):
+    district_number = match.group(1)
+    return f'phường {district_number}'
+
+def has_street_name(address):
+    street_name_pattern = r'\b(?:\w+\s*)?(\d+(?:\/\d+)?\s*[abcd]?[^\d]*\s*\d*(?:\s*\d+(?:\/\d+)?)?\s*[abcd]?[^\d]*(?:phạm đăng giãng|ngô y linh|bình thành|phạm bành|đinh nghị xuân|an dương vương|đỗ năng tế|bùi hữu diện|đinh nghị xuân|đỗ năng tế|tây lân|bùi tư toàn|tây lân|hoàng văn hợp|tỉnh lô|nguyễn triệu luật|nguyễn quý yêm|đỗ năng tế|trần đại nghĩa|bùi tư toàn|phùng tá chu|khiếu năng tĩnh|phan anh|nguyễn cửu phú|nguyễn quý yêm|trương thước phan|nguyễn thị tú|bình thành|đường|đường|đ\\.|d\\.|duong|duong|đại lộ đồng khởi|tân kỳ tân quý|hồ ngọc lãm|lê cơ|lê tấn bê|lê trọng tấn|bình long|nguyễn thức tự|đình nghi xuân|nguyễn văn cự|Kênh Nước Đen|kênh nước đen|kinh dương vương|số 4|bùi dương lịch|trần văn giàu|số 8b|gò xoài|số 1a|lê văn quới|hồ văn long|hồ học lãm|bình trị đông|hồ văn long|ao đôi|miếu bình đông|trần thanh mại|trần thành đại|26/3|26 tháng 3|liên khu|liên khu 5 6|liên khu 5-6|miếu gò xoài|phạm đăng giảng|lê đình cẩn|lộ phước hiệp|đương lộ làng|phan đình phùng|trương văn kỉnh|nguyễn đình chiểu|phú hoà|phan đình phùng|hoà hảo|tiền phong|lê văn tám|nguyễn bỉnh khiêm|tô thị huỳnh|lê văn khuyên|nguyễn văn tiếp|nguyễn văn cương|lê văn tường|võ văn môn|lê lợi|nguyễn trãi|hùng vương|nguyễn thị nhỏ|nguyễn thị bảy|nguyễn chí thanh|thống chế sỹ|phạm văn thành|huynh chau so|huỳnh châu sổ|nguyễn đình chiểu|đỗ tường phong|sơn thông|đỗ trình thoại|nguyễn thông|lãnh binh thái|phạm văn thành|trần công oanh|đồng khởi|châu thị kim|lê văn tưởng|phạm ngũ lão|nguyễn văn trổi|nguyễn thái bình|hoàng hoa thám|đặng văn truyện|huỳnh văn đảnh|nguyễnvăn trưng|vành đai|nguyen thong|nguyễn thông|nguyen trung truc|trương định|nguyễn thị định|nguyễn văn nhâm|ql|ql|ba sa gò mối|mỹ thuận|bùi hữu nghĩa|châu thị kim|cử luyện|nguyễn huệ|hoàng hoa thám|nguyễn văn tư|nguyễn huệ|đoàn hoàng minh|phan văn mảng|đồng khởi|nguyễn văn tuôi|tán kế|châu thị kim|trần văn đấu|sương nguyệt ánh|châu văn bảy|nguyễn trung trực|nguyễn văn cánh|nguyễn minh đường|nguyễn thị hạnh|đỗ đình thoại|nguyễn du|châu thị kim|trương vĩnh ký|nguyen thi dinh|hồ văn huê|nguyễn đáng|vĩnh phú|châu thị kim|đoàn hoàng minh|huỳnh việt thanh|nguyễn hữu thọ|luong van chan|phan đình phùng|phạm văn ngô|nguyen thong|đương 30/4|cmt8|cmt8|huỳnh tấn phát|hương lộ|hl|trần văn đạt|quốc lộ|hương lộ|tỉnh lộ|dt|dt|nguyễn an ninh|lê hồng phong|lộc trung|lê minh xuân|mai thị tốt|phạm văn ngô|tl|lê thị trâm|quoc lo|tỉnh lộ|nguyễn thị minh khai|phạm văn chiên|võ văn nhơn|lê hữu nghĩa|phan văn lay|châu văn giác|nguyễn huỳnh đức|phan văn mãng|bùi tấn|lưu nghiệp anh|lê hồng phong|nguyễn văn siêu|nguyễn văn quá|vo cong ton|thái hữu kiểm|trần minh châu|lý thường kiệt|phạm văn ngũ|trần phong sắc|nguyễn văn kỉnh|phan văn mãng|nguyễn cửu vân|bùi thị hồng|trần thế sinh|hoàng anh|huỳnh văn tạo|nguyễn văn trung|đỗ tường tự|nguyễn văn trưng|tl|đt|trần phú|nguyễn thị diện|nguyễn văn tiến|phan van lay|nguyen thi minh khai|đỗ tường tự|thủ khoa huân|thanh hà|tân long|truong bình|huỳnh thị lung| phan thanh giảng| phan thanh giảnp|đinh viết cừu|võ nguyên giáp|lộ dừa|truong vinh ky|phan văn tình|trịnh quang nghị|nguyễn minh trung|ca văn thỉnh|bàu sen|chu văn an|trần thị non|lê lợi|võ công tồn|nguyễntrung trực|phan van mang|phan văn mảng|phan văn mãng|nguyễn hòa luông|nguyễn văn trỗi|võ văn kiệt|huỳnh văn gấm|thanh hà|hòa lạc c|phạm văn ngô|phạm văn ngô|phước toàn|vỏ duy tạo|lảnh binh thái|nguyen cuu van|trần phú|cao văn lầu|điện biên phủ|bạch đằng|phú hòa|huỳnh văn thanh|võ văn tần|phan văn tình|chu van an|thuận hòa|vũ đình liệu|đồng văn dẫn|mậu thân|cao thị mai|nguyễn văn rành|nguyễn công trung|nguyễn minh trường|nguyễn quang đại|hai bà trưng|võ thị sáu|trần quốc tuấn|lê văn kiệt|nguyễn văn tạo|30 tháng 4|3/2|phan đình phùng|thủ khoa huân|phan văn tình|hoàng lam|ngô quyền|nguyễn thị bẹ|phan văn đạt|nguyễn minh trường|võ công tồn|huỳnh văn gấm|huỳnh văn lộng|bình hòa|nguyen huu tho|nguyễn hữu thọ|võ công tồn|trần phong sắc|trần phong sẳ|phạm ngọc tòng|phan văn tình|trần hưng đạo|nguyễn văn rành|nguyễn văn cảnh|thủ khoa thừa|lê thị điền|rạch tre|trần hưng dạo|võ công tồn|võ hồng cúc|lê văn kiệt|phạm văn trạch|lê văn tao|nguyễn thiện thành|huỳnh hữu thống|2 tháng 9|phan châu trinh|hoàng lam|trần văn trà|nguyễn thị út|nguyễn thị út|bình trị 2|lê văn trần|trưng nhị|bình hòa|nguyễn đìnhchiểu|hương lộ|nguyen thi bay|nguyễn thị bảy|đt 816|huỳnh văn đảnh|huỳnh văn đảnh|nguyễn văn tiếp|nguyễn văn tiếp|cao thi mai|đt825|đặng văn búp|30 thang 4|đt 835b)\s*\S*)\b'
+    return bool(re.search(street_name_pattern, address))
+
+def loc_vigo_r2(vigo_lower):
+    columns_to_lowercase = ['CustomerAddress', 'WardName', 'DistrictName', 'ProvinceName']
+    vigo_lower[columns_to_lowercase] = vigo_lower[columns_to_lowercase].apply(lambda x: x.astype(str))
+    vigo_lower['CustomerAddress'] = vigo_lower['CustomerAddress'].apply(lambda x: ', '.join(dict.fromkeys(x.split(', '))))
+    vigo_lower['CustomerAddress'] = vigo_lower['CustomerAddress'].apply(lambda x: re.sub(r'\bp(\d+)\b', convert_district, x))
+    vigo_lower['CustomerAddress'] = vigo_lower['CustomerAddress'].apply(lambda x: ', '.join(dict.fromkeys(x.split(', '))))
+    vigo_lower['CustomerAddress'] = vigo_lower['CustomerAddress'].str.lower()
+    with_street_vigo_lower = vigo_lower[vigo_lower['CustomerAddress'].apply(has_street_name)]
+    without_street_vigo_lower = vigo_lower[~vigo_lower['CustomerAddress'].apply(has_street_name)]
+    contains_keywords = with_street_vigo_lower[with_street_vigo_lower['CustomerAddress'].str.contains('trụ điện|trụ|khóm|tru điện|tru dien|tđ|chợ|chợ|ngã 4|ngã 3|ấp an vĩnh|gần khánh uyên 1|cột điện|ấp 2|cột|hẻm|kp2|ấp 4|ấp mới 2|ấp bàu sen|ấp nô công|cộ|apa an vĩnh 1', case=False, regex=True)]
+    does_not_contain_keywords = with_street_vigo_lower[ ~with_street_vigo_lower['CustomerAddress'].str.contains('trụ điện|trụ|khóm|tru điện|tru dien|tđ|chợ|chợ|ngã 4|ngã 3|ấp an vĩnh|gần khánh uyên 1|cột điện|ấp 2|cột|hẻm|kp2|ấp 4|ấp mới 2|ấp bàu sen|ấp nô công|cộ|apa an vĩnh 1', case=False, regex=True)]
+    df_khongthoa = pd.concat([without_street_vigo_lower, contains_keywords])
+    contains_keywords_2 = df_khongthoa[df_khongthoa['CustomerAddress'].str.contains('1404 đong trị|191, tỉnh lộ 914|24a tấn đức', case=False, regex=True)]
+    does_not_contain_keywords_2 = df_khongthoa[ ~df_khongthoa['CustomerAddress'].str.contains('1404 đong trị|191, tỉnh lộ 914|24a tấn đức', case=False, regex=True)]
+    df_thoa = does_not_contain_keywords.copy()
+    df_thoa = pd.concat([df_thoa, contains_keywords_2])
+    df_khongthoa = does_not_contain_keywords_2.copy()    
+    df_khongthoa['CustomerAddress'] = df_khongthoa['CustomerAddress'].replace(to_replace=r'Unnamed', value='', regex=True)
+
+    return df_thoa, df_khongthoa
+
+def extract_location(text):
+    match = re.search(r'(.+?(?:xã|phường|thị trấn)(?=\s|$))', text)
+    if match:
+        result = match.group(1)
+    else:
+        result = text
+    return result.strip()
+    
+def xuly_address_hvn(OptionalText, data, text_remove):
+    OptionalText['Replace'].fillna('', inplace=True)
+    OptionalText['Replace'].replace({None: ''}, inplace=True)
+    OptionalText['Replace'].replace({'NULL': ''}, inplace=True)
+
+    for index, row in OptionalText.iterrows():
+        optional_text = row['Optional']
+        replace_text = row['Replace']
+        
+        data['CustomerAddress'] = data['CustomerAddress'].str.replace(optional_text, replace_text)
+
+    data['result'] = data['CustomerAddress'].apply(extract_location)
+
+    text_remove['Replace'].fillna('', inplace=True)
+    text_remove['Replace'].replace({None: ''}, inplace=True)
+    text_remove['Replace'].replace({'NULL': ''}, inplace=True)\
+
+    # Vòng lặp qua từng hàng của OptionalText
+    for index, row in text_remove.iterrows():
+        optional_text = row['Text']
+        replace_text = row['Replace']
+        
+        # Thực hiện thay thế trong cột 'Address' của HVN
+        data['result'] = data['result'].str.replace(optional_text, replace_text)
+
+    return data
+
+def xuly_address_Vigo(OptionalText, data, text_remove):
+    OptionalText['Replace'].fillna('', inplace=True)
+    OptionalText['Replace'].replace({None: ''}, inplace=True)
+    OptionalText['Replace'].replace({'NULL': ''}, inplace=True)
+
+    data['result'] = data['CustomerAddress'].apply(extract_location)
+
+    text_remove['Replace'].fillna('', inplace=True)
+    text_remove['Replace'].replace({None: ''}, inplace=True)
+    text_remove['Replace'].replace({'NULL': ''}, inplace=True)
+
+    for index, row in text_remove.iterrows():
+        optional_text = row['Text']
+        replace_text = row['Replace']
+        
+        # Thực hiện thay thế trong cột 'Address' của HVN
+        data['result'] = data['result'].str.replace(optional_text, replace_text)   
+    
+    return data
+
+def tao_address(data):
+    data['WardName'].fillna('', inplace=True)
+    data['WardName'].replace({None: ''}, inplace=True)
+    data['WardName'].replace({'NULL': ''}, inplace=True)
+
+    data['DistrictName'].fillna('', inplace=True)
+    data['DistrictName'].replace({None: ''}, inplace=True)
+    data['DistrictName'].replace({'NULL': ''}, inplace=True)
+
+    data['Address'] = data['result'] + data['WardName'] + data['DistrictName'] + data['ProvinceName']
+
+    Op = pd.read_excel("Op_Text_vigo.xlsx")
+
+    Op['Replace'].fillna('', inplace=True)
+    Op['Replace'].replace({None: ''}, inplace=True)
+    Op['Replace'].replace({'NULL': ''}, inplace=True)
+
+    # Vòng lặp qua từng hàng của OptionalText
+    for index, row in Op.iterrows():
+        optional_text = row['Optional']
+        replace_text = row['Replace']
+        
+        # Check if replace_text is a string
+        if not isinstance(replace_text, str):
+            # Convert replace_text to string or handle accordingly
+            replace_text = str(replace_text)
+
+        # Thực hiện thay thế trong cột 'Address' của HVN
+        data['Address'] = data['Address'].str.replace(optional_text, replace_text)
+
+    return data
+
+def fuzzy_similarity(row):
+    return fuzz.token_set_ratio(row['Address_file1'], row['Address_file2'])
+
+def round2(data1, data2):
+    data1['Address'] = data1['Address'].str.lower()
+    data1['Address'] = data1['Address'].apply(lambda x: re.sub(r'[^a-z0-9\s/]', '', x))
+    data1['Address'] = data1['Address'].apply(lambda x: re.sub(r'\s', '', x))
+    data2['Address'] = data2['Address'].str.lower()
+    data2['Address'] = data2['Address'].apply(lambda x: re.sub(r'[^a-z0-9\s/]', '', x))
+    data2['Address'] = data2['Address'].apply(lambda x: re.sub(r'\s', '', x))
+    data1['ProvinceName'] = data1['ProvinceName'].str.lower()
+    data1['DistrictName'] = data1['DistrictName'].str.lower()
+    data1['WardName'] = data1['WardName'].str.lower()
+    data2['ProvinceName'] = data2['ProvinceName'].str.lower()
+    data2['DistrictName'] = data2['DistrictName'].str.lower()
+    data2['WardName'] = data2['WardName'].str.lower()
+
+    result = pd.merge(data1, data2, left_on=['ProvinceName', 'DistrictName', 'WardName'],
+                    right_on=['ProvinceName', 'DistrictName', 'WardName'], how='inner', suffixes=('_file1', '_file2'))
+
+    result['fuzzy_similarity'] = result.apply(fuzzy_similarity, axis=1)
+    matching_rows_fuzzy = result[result['fuzzy_similarity'] == 100]
+
+    return matching_rows_fuzzy
 
 # Thay thế những từ trùng với thông tin trong cột Optional
 def replace_optional_text(row, remove_name):
@@ -312,342 +649,10 @@ def xuly_hvnname(HVN, remove_name):
 
     return HVN
 
-def round1(HVN_thoa, Vigo_thoa):
-    if (len(HVN_thoa['Phone'].unique()) < len(Vigo_thoa['Phone'].unique())):
-        phone_list = HVN_thoa['Phone'].unique().tolist() 
-    else:
-        phone_list = Vigo_thoa['Phone'].unique().tolist()
-    
-    phonenum_map = pd.DataFrame()
-    for phone_num in tqdm(phone_list):
-        Data_df_phone = HVN_thoa[HVN_thoa['Phone'] == phone_num]
-        VIGO_df_phone = Vigo_thoa[Vigo_thoa['Phone'] == phone_num]
-        
-        Data_df_phone['key'] = 1
-        VIGO_df_phone['key'] = 1
-        df_merged_by_phone = pd.merge(Data_df_phone, VIGO_df_phone, on='key', suffixes=('_file1', '_file2'))
-        del df_merged_by_phone['key']
-        phonenum_map = pd.concat([phonenum_map, df_merged_by_phone])
-    
-    return phonenum_map
-
-def is_valid_format(address):
-    parts = address.split(', ')
-    if len(parts) == 2:
-        first_part = parts[0].split(' ')
-        if len(first_part) >= 2 and first_part[1] == 'Ấp' and 'Thị Trấn' in parts[1]:
-            return True
-    return False
-
-def is_valid_format_1(address):
-    if pd.isna(address):
-        return False
-    pattern = re.compile(r'\b\d+[a-zA-Z]*\s*Ấp[^\d,]+\b')
-    match = pattern.match(address)
-    return bool(match and match.group(0) == address)
-
-def is_valid_format_2(address):
-    if pd.isna(address):
-        return False
-    pattern = re.compile(r'\b\d+\s*Kênh Xáng,\s*Ấp (\d+),\s*Xã (\D+)')
-    match = pattern.match(address)
-    return bool(match and match.group(1) and match.group(2))
-
-def is_valid_format_3(address):
-    if pd.isna(address):
-        return False
-    pattern = re.compile(r'\b30 Cầu Đường Bàng,\s*Xã (\D+)')
-    match = pattern.match(address)
-    return bool(match and match.group(1))
-
-def is_valid_format_4(address):
-    if pd.isna(address):
-        return False
-    pattern = re.compile(r'\b29 Thuận Hòa')
-    return bool(re.match(pattern, address))
-
-def is_valid_format_5(address):
-    if pd.isna(address):
-        return False
-    pattern = re.compile(r'\b(\d+\s*Hòa Lạc C)\s*,\s*Xã (\D+)')
-    return bool(re.match(pattern, address))
-
-def is_valid_format_6(address):
-    if pd.isna(address):
-        return False
-    pattern = re.compile(r'\b(\d+\s*Cây Khô Lớn)\s*,\s*Xã (\D+)')
-    return bool(re.match(pattern, address))
-
-def loc_hvn_r2(HVN_r2):
-    HVN_r2['WardName'].fillna('', inplace=True)
-    HVN_r2['WardName'].replace({None: ''}, inplace=True)
-    HVN_r2['WardName'].replace({'NULL': ''}, inplace=True)
-
-    HVN_r2['CustomerAddress'].fillna('', inplace=True)
-    HVN_r2['CustomerAddress'].replace({None: ''}, inplace=True)
-    HVN_r2['CustomerAddress'].replace({'NULL': ''}, inplace=True)
-    HVN_r2['CustomerAddress'] = HVN_r2['CustomerAddress'].str.strip()
-
-    HVN_r2['DistrictName'].fillna('', inplace=True)
-    HVN_r2['DistrictName'].replace({None: ''}, inplace=True)
-    HVN_r2['DistrictName'].replace({'NULL': ''}, inplace=True)
-
-    HVN_r2['OutletName'].fillna('', inplace=True)
-    HVN_r2['OutletName'].replace({None: ''}, inplace=True)
-    HVN_r2['OutletName'].replace({'NULL': ''}, inplace=True)
-
-    HVN_r2['CustomerAddress'].fillna('', inplace=True)
-    HVN_r2['CustomerAddress'].replace({None: ''}, inplace=True)
-    HVN_r2['CustomerAddress'].replace({'NULL': ''}, inplace=True)
-    HVN_r2['CustomerAddress'] = HVN_r2['CustomerAddress'].str.strip()
-
-    HVN_digit_mask = HVN_r2[HVN_r2['CustomerAddress'].str.match(r'^\d')]
-    HVN_notdigit_mask = HVN_r2[~HVN_r2['CustomerAddress'].str.match(r'^\d')]
-
-    word_list = [
-    'Đường', 'đường', 'Đ\\.', 'd\\.', '827', 'Trần Thành Đại', 'N27', 'Huỳnh Văn Thanh', 'Võ Văn Thành', 'Nguyễn Hoà Luông', 'Mai Thị Non', 'Lương Văn Bang', 'Truong Binh - Phuoc Lâm', 'Lộ 837', 'Huỳnh Thị Mai', 'ĐƯỜNG 836','Tiên Đông Thượng', 'Lộ Tránh', 'Công Lý', 'Ban Cao', 'CaoVăn Lầu', 'Bạch Đằng', 'Lộ Thầy Cai', 'Bình An', 'Nguyễn Công Truc', 'Long Khốt', 'Duong', 'duong', 'Bà Chánh Thâu','Trần Ngọc Giải', 'Dương Văn Dương', 'Đ12', 'Lê Văn Sáu', 'Nguyễn Văn Tư', 'Lê Văn Tám', 'Đt', 'Nguyễn đình chiểu', 'Trương Văn Kỉnh', 'Tiền Phong', 'Tô Thị Huỳnh', 'Đặng Ngọc Sương', 'phan đình Phùng', 'Lê Văn Khuyên', 'Nguyễn Văn Tiếp', 'Nguyễn Văn Cương', 'Lê Văn Tường', 'Võ Văn Môn', 'Lê Lợi', 'Nguyễn Trãi', 'Hùng Vương', 'Nguyễn Thị Nhỏ', 'Nguyễn Thị Bảy', 'Nguyễn Chí Thanh', 'Thống Chế Sỹ', 'Phạm Văn Thành', 'Huynh Chau So', 'Huỳnh Châu Sổ', 'Nguyễn Đình Chiểu', 'Đỗ Tường Phong', 'Sơn Thông', 'Đỗ Trình Thoại', 'Nguyễn Thông', 'Lãnh Binh Thái', 'Phạm Văn Thành', 'Trần Công Oanh', 'Đồng Khởi', 'Châu Thị Kim', 'Lê Văn Tưởng', 'Phạm Ngũ Lão', 'Nguyễn Văn Trổi', 'Nguyễn Thái Bình', 'Hoàng Hoa Thám', 'Đặng Văn Truyện', 'Huỳnh Văn Đảnh', 'Nguyễnvăn Trưng', 'Vành Đai', 'Nguyen Thong', 'Phú Hoà', 'phan đình Phùng', 'Hoà Hảo', 'Tiền Phong', 'Nguyễn Thông', 'Nguyen Trung Truc', 'Trương Định', 'Nguyễn Thị Định', 'Nguyễn Văn Nhâm', 'QL', 'Ql', 'Ba Sa Gò Mối', 'Mỹ Thuận', 'Bùi Hữu Nghĩa', 'Châu Thị Kim', 'Cử Luyện', 'Nguyễn Huệ', 'Hoàng Hoa Thám', 'Nguyễn Văn Tư', 'Nguyễn Huệ', 'Đoàn Hoàng Minh', 'Phan Văn Mảng', 'Đồng Khởi', 'Nguyễn Văn Tuôi', 'Tán Kế', 'Luu Van Te', 'Châu Thị Kim', 'Trần Văn Đấu', 'Quách Văn Tuấn', 'Sương Nguyệt Ánh', 'Châu Văn Bảy', 'Nguyễn Trung Trực', 'Nguyễn Văn Cánh', 'nguyễn minh đường', 'Nguyễn Thị Hạnh', 'Đỗ Đình Thoại', 'Nguyễn Du', 'Châu Thị Kim', 'Trương Vĩnh Ký', 'Nguyen Thi Dinh', 'Hồ Văn Huê', 'Nguyễn Đáng', 'Vĩnh Phú', 'Châu Thị Kim', 'Đoàn Hoàng Minh', 'Huỳnh Việt Thanh', 'Nguyễn Hữu Thọ', 'Luong Van Chan', 'Phan Đình Phùng', 'Phạm Văn Ngô', 'Nguyen Thong', 'Đương 30/4', 'CMT8', 'cmt8', 'Huỳnh Tấn Phát', 'Hương Lộ', 'HL', 'Trần Văn Đạt', 'Quốc Lộ', 'Tỉnh lộ', 'Dt', 'DT', 'Nguyễn An Ninh', 'Lê Hồng Phong', 'Lộc Trung', 'Lê Minh Xuân', 'Mai Thị Tốt', 'Phạm Văn Ngô', 'TL', 'Lê Thị Trâm', 'Quoc Lo', 'Tỉnh Lộ', 'Nguyễn Thị Minh Khai', 'Phạm Văn Chiên', 'Võ Văn Nhơn', 'Lê Hữu Nghĩa', 'Phan Văn Lay', 'Châu Văn Giác', 'Nguyễn Huỳnh Đức', 'Phan Văn Mãng', 'Bùi Tấn', 'Lưu Nghiệp Anh', 'Lê Hồng Phong', 'Nguyễn Văn Siêu', 'Nguyễn Văn Quá', 'Vo Cong Ton', 'Thái Hữu Kiểm', 'Trần Minh Châu', 'Lý Thường Kiệt', 'Phạm Văn Ngũ', 'Trần Phong Sắc', 'Nguyễn Văn Kỉnh', '827D', 'Phan Văn Mãng', 'Nguyễn Cửu Vân', 'Bùi Thị Hồng', 'Trần Thế Sinh', 'Hoàng Anh', 'Huỳnh Văn Tạo', 'Nguyễn Văn Trung', 'Đỗ Tường Tự', 'Nguyễn Văn Trưng', 'Tl', 'ĐT', 'Trần Phú', 'Nguyễn Thị Diện', '19/5', 'Hl', 'Nguyễn Văn Tiến', 'Phan Van Lay', 'Nguyen Thi Minh Khai', 'Đỗ Tường Tự', 'Thủ Khoa Huân', 'Thanh Hà', 'Tân Long', 'Truong Bình', 'Huỳnh Thị Lung', ' Phan Thanh Giảng', ' Phan Thanh Giảnp', 'Đinh Viết Cừu', 'Võ Nguyên Giáp', 'Lộ Dừa', 'Truong Vinh Ky', 'Phan Văn Tình', 'Trịnh Quang Nghị', 'Nguyễn Minh Trung', 'Ca Văn Thỉnh', 'Bàu Sen', 'Chu Văn An', 'Trần Thị Non', 'Lê lợi', 'Võ Công Tồn', 'NguyễnTrung Trực', 'Phan Van Mang', 'Phan Văn Mảng', 'Phan Văn Mãng', 'Nguyễn Hòa Luông', 'Nguyễn Văn Trỗi', 'Võ Văn Kiệt', 'Huỳnh Văn Gấm', 'Thanh hà', 'Hòa Lạc C', 'phạm văn ngô', 'Phạm Văn Ngô', 'Phước Toàn', 'Vỏ Duy Tạo', 'Lảnh Binh Thái', 'Nguyen Cuu Van', 'Trần Phú', 'Cao Văn Lầu', 'Điện Biên Phủ', 'Bạch Đằng' 'Huỳnh Văn Thanh', 'Võ Văn Tần', 'Phan Văn Tình', 'Chu Van An', 'Thuận Hòa', 'Vũ Đình Liệu', 'Đồng Văn Dẫn', 'Mậu Thân', 'Cao Thị Mai', 'Nguyễn Văn Rành', 'Nguyễn Công Trung', 'Nguyễn Minh Trường', 'Nguyễn Quang Đại', 'Hai Bà Trưng', 'Võ Thị Sáu', 'Trần Quốc Tuấn', 'Lê Văn Kiệt', 'Nguyễn Văn Tạo', '30 Tháng 4', '3/2', 'Phan đình phùng', 'Thủ Khoa Huân', 'Phan Văn Tình', 'Hoàng Lam', 'Ngô Quyền', 'Nguyễn Thị Bẹ', 'Phan Văn Đạt', 'Nguyễn Minh Trường', 'Võ Công Tồn', 'Huỳnh Văn Gấm', 'Huỳnh Văn Lộng', 'Bình Hòa', 'Nguyen Huu Tho', 'Nguyễn Hữu Thọ', 'Võ Công Tồn', 'Trần Phong Sắc', 'Trần Phong Sẳ', 'Phạm Ngọc Tòng', 'Phan Văn Tình', 'Trần Hưng Đạo', 'Nguyễn Văn Rành', 'Nguyễn Văn Cảnh', 'Thủ Khoa Thừa', 'Lê Thị Điền', 'Rạch Tre', 'Trần Hưng Dạo', 'Võ Công Tồn', 'Võ Hồng Cúc', 'Lê Văn Kiệt', 'Phạm Văn Trạch', 'Lê Văn Tao', 'Nguyễn Thiện Thành', 'Huỳnh Hữu Thống', '2 tháng 9', 'Phan Châu Trinh', 'Hoàng Lam', 'Trần Văn Trà', 'NGUYỄN THỊ ÚT', 'Nguyễn Thị Út', 'Bình Trị 2', 'Lê Văn Trần', 'Trưng Nhị', 'Bình hòa', 'Nguyễn ĐìnhChiểu', 'Hương lộ', 'Nguyen Thi Bay', 'Nguyễn Thị Bảy', 'Đt 816', 'huỳnh văn đảnh', 'Huỳnh Văn Đảnh', 'Nguyễn văn tiếp', 'Nguyễn Văn Tiếp', 'Cao Thi Mai', 'Đt825', 'Đặng Văn Búp', '30 Thang 4', 'Nguyễn Bỉnh Khiêm', 'Đt 835B'
-    ]
-
-    pattern = '|'.join(word_list)
-
-    df_filtered = HVN_digit_mask[HVN_digit_mask['CustomerAddress'].str.contains(pattern, regex=True)]
-    df_notfiltered = HVN_digit_mask[~HVN_digit_mask['CustomerAddress'].str.contains(pattern, regex=True)]
-
-    regex_pattern = r'\b\d+ Ấp [^\d]+, Xã \w+\b'
-
-    ap_ten = df_filtered[df_filtered['CustomerAddress'].str.contains(regex_pattern, regex=True, case=False)]
-    non_ap_ten = df_filtered.loc[~df_filtered['CustomerAddress'].str.contains(regex_pattern, regex=True, case=False)]
-    so_ap = non_ap_ten[non_ap_ten['CustomerAddress'].str.match(r'^\d+ Ấp [^QLHLĐTHLDlt]+\b(?:(?!QL|HL|ĐT|Hương Lộ|Ql|Tl|TL|Dt|Quốc Lộ|Tỉnh Lộ|Đinh Viết Cừu|Nguyễn Thông).)*$')]
-    noso_ap = non_ap_ten[~non_ap_ten['CustomerAddress'].str.match(r'^\d+ Ấp [^QLHLĐTHLDlt]+\b(?:(?!QL|HL|ĐT|Hương Lộ|Ql|Tl|TL|Dt|Quốc Lộ|Tỉnh Lộ|Đinh Viết Cừu|Nguyễn Thông).)*$')]
-    ap = noso_ap[noso_ap['CustomerAddress'].str.match(r'^\d+ Ấp (?!.*\b(QL|HL|ĐT|Hương Lộ|Ql|Tl|TL|Dt|Quốc Lộ|Tỉnh Lộ)\b)[^\d]+(\s+\d+)?$')]
-    no_ap = noso_ap[~noso_ap['CustomerAddress'].str.match(r'^\d+ Ấp (?!.*\b(QL|HL|ĐT|Hương Lộ|Ql|Tl|TL|Dt|Quốc Lộ|Tỉnh Lộ)\b)[^\d]+(\s+\d+)?$')]
-    xa = no_ap[noso_ap['CustomerAddress'].str.match(r'^\d+ Xã (?!.*\b(QL|HL|ĐT|Hương Lộ|Ql|Tl|TL|Dt|Quốc Lộ|Tỉnh Lộ)\b)[^\d]+(\s+\d+)?$')]
-    no_xa = no_ap[~no_ap['CustomerAddress'].str.match(r'^\d+ Xã (?!.*\b(QL|HL|ĐT|Hương Lộ|Ql|Tl|TL|Dt|Quốc Lộ|Tỉnh Lộ)\b)[^\d]+(\s+\d+)?$')]
-    ap2 = no_xa[no_xa['CustomerAddress'].str.match(r'\d+/[^ ]+ Ấp [^,]+')]
-    no_ap2 = no_xa[~no_xa['CustomerAddress'].str.match(r'\d+/[^ ]+ Ấp [^,]+')]
-    xa2 = no_ap2[no_ap2['CustomerAddress'].str.match(r'\d+/[^ ]+ Xã [^,]+')]
-    no_xa2 = no_ap2[~no_ap2['CustomerAddress'].str.match(r'\d+/[^ ]+ Xã [^,]+')]
-    
-    ap_thitran = no_xa2[no_xa2['CustomerAddress'].apply(is_valid_format)]
-    noap_thitran = no_xa2[~no_xa2['CustomerAddress'].apply(is_valid_format)]
-
-    ap_df = noap_thitran[noap_thitran['CustomerAddress'].apply(lambda x: is_valid_format_1(x) if not pd.isna(x) else False)]
-    no_ap_df = noap_thitran[~noap_thitran['CustomerAddress'].apply(lambda x: is_valid_format_1(x) if not pd.isna(x) else False)]
-    
-    ap_df_2 = no_ap_df[no_ap_df['CustomerAddress'].str.match(r'^\d+ Ap [^QLHLĐTHLDlt]+\b(?:(?!QL|HL|ĐT|Hương Lộ|Ql|Tl|TL|Dt|Quốc Lộ|Tỉnh Lộ|Đinh Viết Cừu|Nguyễn Thông).)*$')]
-    no_ap_df_2 = no_ap_df[~no_ap_df['CustomerAddress'].str.match(r'^\d+ Ap [^QLHLĐTHLDlt]+\b(?:(?!QL|HL|ĐT|Hương Lộ|Ql|Tl|TL|Dt|Quốc Lộ|Tỉnh Lộ|Đinh Viết Cừu|Nguyễn Thông).)*$')]
-    
-    kenhxang = no_ap_df_2[no_ap_df_2['CustomerAddress'].apply(lambda x: is_valid_format_2(x) if not pd.isna(x) else False)]
-    no_kenhxang = no_ap_df_2[~no_ap_df_2['CustomerAddress'].apply(lambda x: is_valid_format_2(x) if not pd.isna(x) else False)]
-    
-    cauduongbang = no_kenhxang[no_kenhxang['CustomerAddress'].apply(lambda x: is_valid_format_3(x) if not pd.isna(x) else False)]
-    no_cauduongbang = no_kenhxang[~no_kenhxang['CustomerAddress'].apply(lambda x: is_valid_format_3(x) if not pd.isna(x) else False)]
-    
-    thuanhoa = no_cauduongbang[no_cauduongbang['CustomerAddress'].apply(lambda x: is_valid_format_4(x) if not pd.isna(x) else False)]
-    no_thuanhoa = no_cauduongbang[~no_cauduongbang['CustomerAddress'].apply(lambda x: is_valid_format_4(x) if not pd.isna(x) else False)]
-    
-    hoa_lac_c = no_thuanhoa[no_thuanhoa['CustomerAddress'].apply(lambda x: is_valid_format_5(x) if not pd.isna(x) else False)]
-    no_hoa_lac_c = no_thuanhoa[~no_thuanhoa['CustomerAddress'].apply(lambda x: is_valid_format_5(x) if not pd.isna(x) else False)]
-    
-    pattern = re.compile(r'\b695/4 Bình Trị 2, Xã Thuận Mỹ\b')
-
-    binhtri = no_hoa_lac_c[no_hoa_lac_c['CustomerAddress'].str.contains(pattern, na=False, regex=True)]
-    no_binhtri = no_hoa_lac_c[~no_hoa_lac_c['CustomerAddress'].str.contains(pattern, na=False, regex=True)]
-
-    caykho = no_binhtri[no_binhtri['CustomerAddress'].apply(lambda x: is_valid_format_6(x) if not pd.isna(x) else False)]
-    no_caykho = no_binhtri[~no_binhtri['CustomerAddress'].apply(lambda x: is_valid_format_6(x) if not pd.isna(x) else False)]
-
-    pattern = re.compile(r'\b(Bình An)\s*,\s*Xã (\S+)\b')
-
-    binhan = no_caykho[no_caykho['CustomerAddress'].str.contains(pattern, na=False, regex=True)]
-    no_binhan = no_caykho[~no_caykho['CustomerAddress'].str.contains(pattern, na=False, regex=True)]
-
-    df_khongthoa = pd.concat([HVN_notdigit_mask, df_notfiltered])
-    df_khongthoa = pd.concat([df_khongthoa, ap_ten])
-    df_khongthoa = pd.concat([df_khongthoa, so_ap])
-    df_khongthoa = pd.concat([df_khongthoa, ap])
-    df_khongthoa = pd.concat([df_khongthoa, xa])
-    df_khongthoa = pd.concat([df_khongthoa, ap2])
-    df_khongthoa = pd.concat([df_khongthoa, xa2])
-    df_khongthoa = pd.concat([df_khongthoa, ap_thitran])
-    df_khongthoa = pd.concat([df_khongthoa, ap_df])
-    df_khongthoa = pd.concat([df_khongthoa, ap_df_2])
-    df_khongthoa = pd.concat([df_khongthoa, kenhxang])
-    df_khongthoa = pd.concat([df_khongthoa, cauduongbang])
-    df_khongthoa = pd.concat([df_khongthoa, thuanhoa])
-    df_khongthoa = pd.concat([df_khongthoa, hoa_lac_c])
-    df_khongthoa = pd.concat([df_khongthoa, binhtri])
-    df_khongthoa = pd.concat([df_khongthoa, caykho])
-    df_khongthoa = pd.concat([df_khongthoa, binhan])
-
-    pattern = re.compile(r'\b19 Nguyễn Văn Nhân, Xã Thanh Phú\b')
-
-    nguyennhan = df_khongthoa[df_khongthoa['CustomerAddress'].str.contains(pattern, na=False, regex=True)]
-    no_nguyennhan = df_khongthoa[~df_khongthoa['CustomerAddress'].str.contains(pattern, na=False, regex=True)]
-
-    df_thoa = pd.concat([no_binhan, nguyennhan])
-    df_kthoa = no_nguyennhan.copy()
-
-    return df_thoa, df_kthoa
-
-def xuly_toadotrongaddress_vigo(Vigo_r2):
-    contains_plus = Vigo_r2[Vigo_r2['CustomerAddress'].str.contains('\\+')]
-    not_contains_plus = Vigo_r2[~Vigo_r2['CustomerAddress'].str.contains('\\+')]
-
-    contains_plus['plus_word'] = contains_plus['CustomerAddress'].str.extractall(r'(\S+\+\S+)').groupby(level=0).agg(','.join)[0]
-    contains_plus['CustomerAddress'] = contains_plus.apply(lambda row: row['CustomerAddress'].replace(row['plus_word'], ''), axis=1)
-
-    contains_plus = contains_plus.drop('plus_word', axis=1)    
-
-    vigo = pd.concat([contains_plus, not_contains_plus])
-
-    return vigo
-
-def convert_district(match):
-    district_number = match.group(1)
-    return f'phường {district_number}'
-
-def has_street_name(address):
-    street_name_pattern = r'\b(?:\w+\s*)?(\d+(?:\/\d+)?\s*[ABCD]?[^\d]*\s*\d*(?:\s*\d+(?:\/\d+)?)?\s*[ABCD]?[^\d]*(?:Đường|đường|Đ\\.|d\\.|Duong|duong|Đại Lộ Đồng khởi|lộ phước hiệp|đương lộ làng|phan đình Phùng|Trương Văn Kỉnh|Nguyễn đình chiểu|Phú Hoà|phan đình Phùng|Hoà Hảo|Tiền Phong|Lê Văn Tám|Nguyễn Bỉnh Khiêm|Tô Thị Huỳnh|Lê Văn Khuyên|Nguyễn Văn Tiếp|Nguyễn Văn Cương|Lê Văn Tường|Võ Văn Môn|Lê Lợi|Nguyễn Trãi|Hùng Vương|Nguyễn Thị Nhỏ|Nguyễn Thị Bảy|Nguyễn Chí Thanh|Thống Chế Sỹ|Phạm Văn Thành|Huynh Chau So|Huỳnh Châu Sổ|Nguyễn Đình Chiểu|Đỗ Tường Phong|Sơn Thông|Đỗ Trình Thoại|Nguyễn Thông|Lãnh Binh Thái|Phạm Văn Thành|Trần Công Oanh|Đồng Khởi|Châu Thị Kim|Lê Văn Tưởng|Phạm Ngũ Lão|Nguyễn Văn Trổi|Nguyễn Thái Bình|Hoàng Hoa Thám|Đặng Văn Truyện|Huỳnh Văn Đảnh|Nguyễnvăn Trưng|Vành Đai|Nguyen Thong|Nguyễn Thông|Nguyen Trung Truc|Trương Định|Nguyễn Thị Định|Nguyễn Văn Nhâm|QL|Ql|Ba Sa Gò Mối|Mỹ Thuận|Bùi Hữu Nghĩa|Châu Thị Kim|Cử Luyện|Nguyễn Huệ|Hoàng Hoa Thám|Nguyễn Văn Tư|Nguyễn Huệ|Đoàn Hoàng Minh|Phan Văn Mảng|Đồng Khởi|Nguyễn Văn Tuôi|Tán Kế|Châu Thị Kim|Trần Văn Đấu|Sương Nguyệt Ánh|Châu Văn Bảy|Nguyễn Trung Trực|Nguyễn Văn Cánh|nguyễn minh đường|Nguyễn Thị Hạnh|Đỗ Đình Thoại|Nguyễn Du|Châu Thị Kim|Trương Vĩnh Ký|Nguyen Thi Dinh|Hồ Văn Huê|Nguyễn Đáng|Vĩnh Phú|Châu Thị Kim|Đoàn Hoàng Minh|Huỳnh Việt Thanh|Nguyễn Hữu Thọ|Luong Van Chan|Phan Đình Phùng|Phạm Văn Ngô|Nguyen Thong|Đương 30/4|CMT8|cmt8|Huỳnh Tấn Phát|Hương Lộ|HL|Trần Văn Đạt|Quốc Lộ|Hương Lộ|Tỉnh lộ|Dt|DT|Nguyễn An Ninh|Lê Hồng Phong|Lộc Trung|Lê Minh Xuân|Mai Thị Tốt|Phạm Văn Ngô|TL|Lê Thị Trâm|Quoc Lo|Tỉnh Lộ|Nguyễn Thị Minh Khai|Phạm Văn Chiên|Võ Văn Nhơn|Lê Hữu Nghĩa|Phan Văn Lay|Châu Văn Giác|Nguyễn Huỳnh Đức|Phan Văn Mãng|Bùi Tấn|Lưu Nghiệp Anh|Lê Hồng Phong|Nguyễn Văn Siêu|Nguyễn Văn Quá|Vo Cong Ton|Thái Hữu Kiểm|Trần Minh Châu|Lý Thường Kiệt|Phạm Văn Ngũ|Trần Phong Sắc|Nguyễn Văn Kỉnh|Phan Văn Mãng|Nguyễn Cửu Vân|Bùi Thị Hồng|Trần Thế Sinh|Hoàng Anh|Huỳnh Văn Tạo|Nguyễn Văn Trung|Đỗ Tường Tự|Nguyễn Văn Trưng|Tl|ĐT|Trần Phú|Nguyễn Thị Diện|Nguyễn Văn Tiến|Phan Van Lay|Nguyen Thi Minh Khai|Đỗ Tường Tự|Thủ Khoa Huân|Thanh Hà|Tân Long|Truong Bình|Huỳnh Thị Lung| Phan Thanh Giảng| Phan Thanh Giảnp|Đinh Viết Cừu|Võ Nguyên Giáp|Lộ Dừa|Truong Vinh Ky|Phan Văn Tình|Trịnh Quang Nghị|Nguyễn Minh Trung|Ca Văn Thỉnh|Bàu Sen|Chu Văn An|Trần Thị Non|Lê lợi|Võ Công Tồn|NguyễnTrung Trực|Phan Van Mang|Phan Văn Mảng|Phan Văn Mãng|Nguyễn Hòa Luông|Nguyễn Văn Trỗi|Võ Văn Kiệt|Huỳnh Văn Gấm|Thanh hà|Hòa Lạc C|phạm văn ngô|Phạm Văn Ngô|Phước Toàn|Vỏ Duy Tạo|Lảnh Binh Thái|Nguyen Cuu Van|Trần Phú|Cao Văn Lầu|Điện Biên Phủ|Bạch Đằng|Phú Hòa|Huỳnh Văn Thanh|Võ Văn Tần|Phan Văn Tình|Chu Van An|Thuận Hòa|Vũ Đình Liệu|Đồng Văn Dẫn|Mậu Thân|Cao Thị Mai|Nguyễn Văn Rành|Nguyễn Công Trung|Nguyễn Minh Trường|Nguyễn Quang Đại|Hai Bà Trưng|Võ Thị Sáu|Trần Quốc Tuấn|Lê Văn Kiệt|Nguyễn Văn Tạo|30 Tháng 4|3/2|Phan đình phùng|Thủ Khoa Huân|Phan Văn Tình|Hoàng Lam|Ngô Quyền|Nguyễn Thị Bẹ|Phan Văn Đạt|Nguyễn Minh Trường|Võ Công Tồn|Huỳnh Văn Gấm|Huỳnh Văn Lộng|Bình Hòa|Nguyen Huu Tho|Nguyễn Hữu Thọ|Võ Công Tồn|Trần Phong Sắc|Trần Phong Sẳ|Phạm Ngọc Tòng|Phan Văn Tình|Trần Hưng Đạo|Nguyễn Văn Rành|Nguyễn Văn Cảnh|Thủ Khoa Thừa|Lê Thị Điền|Rạch Tre|Trần Hưng Dạo|Võ Công Tồn|Võ Hồng Cúc|Lê Văn Kiệt|Phạm Văn Trạch|Lê Văn Tao|Nguyễn Thiện Thành|Huỳnh Hữu Thống|2 tháng 9|Phan Châu Trinh|Hoàng Lam|Trần Văn Trà|NGUYỄN THỊ ÚT|Nguyễn Thị Út|Bình Trị 2|Lê Văn Trần|Trưng Nhị|Bình hòa|Nguyễn ĐìnhChiểu|Hương lộ|Nguyen Thi Bay|Nguyễn Thị Bảy|Đt 816|huỳnh văn đảnh|Huỳnh Văn Đảnh|Nguyễn văn tiếp|Nguyễn Văn Tiếp|Cao Thi Mai|Đt825|Đặng Văn Búp|30 Thang 4|Đt 835B)\s*\S*)\b'
-    return bool(re.search(street_name_pattern, address))
-
-def loc_vigo_r2(vigo_lower):
-    columns_to_lowercase = ['CustomerAddress', 'WardName', 'DistrictName', 'ProvinceName']
-    vigo_lower[columns_to_lowercase] = vigo_lower[columns_to_lowercase].apply(lambda x: x.astype(str))
-    vigo_lower['CustomerAddress'] = vigo_lower['CustomerAddress'].apply(lambda x: ', '.join(dict.fromkeys(x.split(', '))))
-    vigo_lower['CustomerAddress'] = vigo_lower['CustomerAddress'].apply(lambda x: re.sub(r'\bp(\d+)\b', convert_district, x))
-    vigo_lower['CustomerAddress'] = vigo_lower['CustomerAddress'].apply(lambda x: ', '.join(dict.fromkeys(x.split(', '))))
-    with_street_vigo_lower = vigo_lower[vigo_lower['CustomerAddress'].apply(has_street_name)]
-    without_street_vigo_lower = vigo_lower[~vigo_lower['CustomerAddress'].apply(has_street_name)]
-    contains_keywords = with_street_vigo_lower[with_street_vigo_lower['CustomerAddress'].str.contains('Trụ điện|Trụ|Khóm|tru điện|Tru dien|TĐ|chợ|Chợ|Ngã 4|Ngã 3|Ấp An vĩnh|Gần Khánh Uyên 1|Cột điện|Ấp 2|Cột|Hẻm|Kp2|Ấp 4|Ấp mới 2|ấp Bàu Sen|ấp Nô Công|Cộ|Apa An vĩnh 1', case=False, regex=True)]
-    does_not_contain_keywords = with_street_vigo_lower[ ~with_street_vigo_lower['CustomerAddress'].str.contains('Trụ điện|Trụ|Khóm|tru điện|Tru dien|TĐ|chợ|Chợ|Ngã 4|Ngã 3|Ấp An vĩnh|Gần Khánh Uyên 1|Cột điện|Ấp 2|Cột|Hẻm|Kp2|Ấp 4|Ấp mới 2|ấp Bàu Sen|ấp Nô Công|Cộ|Apa An vĩnh 1', case=False, regex=True)]
-    df_khongthoa = pd.concat([without_street_vigo_lower, contains_keywords])
-    contains_keywords_2 = df_khongthoa[df_khongthoa['CustomerAddress'].str.contains('1404 Đong trị|191, tỉnh lộ 914|24a tấn đức', case=False, regex=True)]
-    does_not_contain_keywords_2 = df_khongthoa[ ~df_khongthoa['CustomerAddress'].str.contains('1404 Đong trị|191, tỉnh lộ 914|24a tấn đức', case=False, regex=True)]
-    df_thoa = does_not_contain_keywords.copy()
-    df_thoa = pd.concat([df_thoa, contains_keywords_2])
-    df_khongthoa = does_not_contain_keywords_2.copy()    
-    df_khongthoa['CustomerAddress'] = df_khongthoa['CustomerAddress'].replace(to_replace=r'Unnamed', value='', regex=True)
-
-    return df_thoa, df_khongthoa
-
-def xuly_address_hvn(OptionalText, data, text_remove):
-    OptionalText['Replace'].fillna('', inplace=True)
-    OptionalText['Replace'].replace({None: ''}, inplace=True)
-    OptionalText['Replace'].replace({'NULL': ''}, inplace=True)
-
-    for index, row in OptionalText.iterrows():
-        optional_text = row['Optional']
-        replace_text = row['Replace']
-        
-        data['CustomerAddress'] = data['CustomerAddress'].str.replace(optional_text, replace_text)
-
-    data['result'] = data['CustomerAddress'].apply(extract_location)
-
-    text_remove['Replace'].fillna('', inplace=True)
-    text_remove['Replace'].replace({None: ''}, inplace=True)
-    text_remove['Replace'].replace({'NULL': ''}, inplace=True)\
-
-    for index, row in text_remove.iterrows():
-        optional_text = row['Text']
-        replace_text = row['Replace']
-        
-        data['result'] = data['result'].str.replace(optional_text, replace_text)
-
-    return data
-
-def extract_location(text):
-    match = re.search(r'(.+?(?:Xã|Phường|Thị Trấn)(?=\s|$))', text)
-    
-    if match:
-        result = match.group(1)
-    else:
-        # Nếu không tìm thấy, lấy toàn bộ địa chỉ
-        result = text
-    
-    return result.strip()
-
-def xuly_address_Vigo(OptionalText, data, text_remove):
-    OptionalText['Replace'].fillna('', inplace=True)
-    OptionalText['Replace'].replace({None: ''}, inplace=True)
-    OptionalText['Replace'].replace({'NULL': ''}, inplace=True)
-
-    data['result'] = data['CustomerAddress'].apply(extract_location)
-
-    text_remove['Replace'].fillna('', inplace=True)
-    text_remove['Replace'].replace({None: ''}, inplace=True)
-    text_remove['Replace'].replace({'NULL': ''}, inplace=True)
-
-    for index, row in text_remove.iterrows():
-        optional_text = row['Text']
-        replace_text = row['Replace']
-        
-        # Thực hiện thay thế trong cột 'Address' của HVN
-        data['result'] = data['result'].str.replace(optional_text, replace_text)   
-    
-    return data
-
-def tao_address(data):
-    data['WardName'].fillna('', inplace=True)
-    data['WardName'].replace({None: ''}, inplace=True)
-    data['WardName'].replace({'NULL': ''}, inplace=True)
-
-    data['DistrictName'].fillna('', inplace=True)
-    data['DistrictName'].replace({None: ''}, inplace=True)
-    data['DistrictName'].replace({'NULL': ''}, inplace=True)
-
-    data['Address'] = data['result'] + data['WardName'] + data['DistrictName'] + data['ProvinceName']
-
-    Op = pd.read_excel("Op_Text_vigo.xlsx")
-
-    Op['Replace'].fillna('', inplace=True)
-    Op['Replace'].replace({None: ''}, inplace=True)
-    Op['Replace'].replace({'NULL': ''}, inplace=True)
-
-    for index, row in Op.iterrows():
-        optional_text = row['Optional']
-        replace_text = row['Replace']
-        
-        # Check if replace_text is a string
-        if not isinstance(replace_text, str):
-            # Convert replace_text to string or handle accordingly
-            replace_text = str(replace_text)
-
-        # Thực hiện thay thế trong cột 'Address' của HVN
-        data['Address'] = data['Address'].str.replace(optional_text, replace_text)
-
-    return data
-
-def fuzzy_similarity(row):
-    return fuzz.token_set_ratio(row['Address_file1'], row['Address_file2'])
-
-def round2(data1, data2):
-    data1['Address'] = data1['Address'].str.lower()
-    data1['Address'] = data1['Address'].apply(lambda x: re.sub(r'[^a-z0-9\s/]', '', x))
-    data1['Address'] = data1['Address'].apply(lambda x: re.sub(r'\s', '', x))
-    data2['Address'] = data2['Address'].str.lower()
-    data2['Address'] = data2['Address'].apply(lambda x: re.sub(r'[^a-z0-9\s/]', '', x))
-    data2['Address'] = data2['Address'].apply(lambda x: re.sub(r'\s', '', x))
-    data1['ProvinceName'] = data1['ProvinceName'].str.lower()
-    data1['DistrictName'] = data1['DistrictName'].str.lower()
-    data1['WardName'] = data1['WardName'].str.lower()
-    data2['ProvinceName'] = data2['ProvinceName'].str.lower()
-    data2['DistrictName'] = data2['DistrictName'].str.lower()
-    data2['WardName'] = data2['WardName'].str.lower()
-
-    result = pd.merge(data1, data2, left_on=['ProvinceName', 'DistrictName', 'WardName'],
-                  right_on=['ProvinceName', 'DistrictName', 'WardName'], how='inner',
-                  suffixes=('_file1', '_file2'), 
-                  left_index=False, right_index=False)
-    
-    result['fuzzy_similarity'] = result.apply(fuzzy_similarity, axis=1)
-    
-    matching_rows_fuzzy = result[result['fuzzy_similarity'] == 100]
-
-    return matching_rows_fuzzy
-
 def get_geoScore(Data_geo, V_geo):
-    geo_dist = (distance.great_circle(Data_geo, V_geo).meters)
+    geo_dist = (distance.great_circle(Data_geo, V_geo).meters)  # higher = worse score
+
+    #   normalize geo_scores where 0m is 100 points and >= 1000m is 0 points
     geo_score = 0
     if (geo_dist > 1000):
         geo_score = 0
@@ -665,28 +670,27 @@ def calc_score_name(df):
     return fuzz.ratio(df['clean_Outlet_Name_file1'], df['clean_Outlet_Name_file2'])
 
 def round3(HVN_r3, Vigo_r3):
-    from unidecode import unidecode
-    HVN_r3['clean_Outlet_Name'] = HVN_r3['clean_Outlet_Name'].apply(lambda x: unidecode(x))
     HVN_r3['ProvinceName'] = HVN_r3['ProvinceName'].str.lower()
     HVN_r3['DistrictName'] = HVN_r3['DistrictName'].str.lower()
     HVN_r3['WardName'] = HVN_r3['WardName'].str.lower()
-    Vigo_r3['clean_Outlet_Name'] = Vigo_r3['clean_Outlet_Name'].apply(lambda x: unidecode(x))
     Vigo_r3['ProvinceName'] = Vigo_r3['ProvinceName'].str.lower()
     Vigo_r3['DistrictName'] = Vigo_r3['DistrictName'].str.lower()
     Vigo_r3['WardName'] = Vigo_r3['WardName'].str.lower()
     
     result = pd.merge(HVN_r3, Vigo_r3, left_on=['ProvinceName', 'DistrictName', 'WardName'],
                     right_on=['ProvinceName', 'DistrictName', 'WardName'], how='inner',  suffixes=('_file1', '_file2'))
-    
-    result['Score_Distance'] = result.apply(calc_score_dist, axis=1)
-    result['Score_Name'] = result.apply(calc_score_name, axis=1)
-    location90storename100 = result.loc[(result['Score_Distance'] >= 90) & (result['Score_Name'] == 100)]
+
+    if result.empty:
+        location90storename100 = result
+    else:
+        result['Score_Distance'] = result.apply(calc_score_dist, axis=1)
+        result['Score_Name'] = result.apply(calc_score_name, axis=1)
+        location90storename100 = result.loc[(result['Score_Distance'] >= 90) & (result['Score_Name'] == 100)]
     
     return location90storename100
 
 # Hàm tính khoảng cách giữa hai điểm dựa trên tọa độ Latitude và Longitude (theo mét)
 def calculate_distance(point1, point2):
-    # point1 và point2 là tuple (latitude, longitude)
     return geodesic(point1, point2).meters
 
 def calc_score_name_2(df):
@@ -747,13 +751,78 @@ def apply_filter(row):
     
 def round4(HVN_r4, Vigo_r4):
     merged_df = pd.merge(HVN_r4, Vigo_r4, on=['ProvinceName', 'DistrictName', 'WardName'], how='inner', suffixes=('_file1', '_file2'))
-    merged_df['distance'] = merged_df.apply(lambda row: calculate_distance((row['Latitude_file1'], row['Longitude_file1']),
-                                                                 (row['Latitude_file2'], row['Longitude_file2'])), axis=1)
+    if merged_df.empty:
+        storename80 = merged_df
+    else:   
+        merged_df['distance'] = merged_df.apply(lambda row: calculate_distance((row['Latitude_file1'], row['Longitude_file1']),
+                                                                    (row['Latitude_file2'], row['Longitude_file2'])), axis=1) 
+        filtered_result = merged_df[merged_df.apply(apply_filter, axis=1)]
+        filtered_result['Score_Name_2'] = filtered_result.apply(calc_score_name_2, axis=1)
+        storename80 = filtered_result.loc[filtered_result['Score_Name_2'] >= 80]   
+    return storename80
+
+def calc_score_address(df):
+    return fuzz.token_set_ratio(df['Address_file1'], df['Address_file2'])
+
+def Loc_2File(df):
+    outlet1_count = df['OutletID_file1'].value_counts()
+    danh_sach_1 = df[df['OutletID_file1'].isin(outlet1_count[outlet1_count == 1].index)]
+    danh_sach_1['Score_Address'] = danh_sach_1.apply(calc_score_address, axis=1)
+    final_result_1 = pd.DataFrame(columns=danh_sach_1.columns)
+    grouped_outlet1 = danh_sach_1.groupby('OutletID_file1')
     
-    filtered_result = merged_df[merged_df.apply(apply_filter, axis=1)]
-    filtered_result['Score_Name_2'] = filtered_result.apply(calc_score_name_2, axis=1)
-    storename80 = filtered_result.loc[filtered_result['Score_Name_2'] >= 80]
-    return filtered_result
+    for outlet_id, group in grouped_outlet1:
+        max_score_row = group.loc[group['Score_Address'].idxmax()]
+        if 'OutletID_file2' not in final_result_1.columns or \
+           (max_score_row['OutletID_file2'] not in final_result_1['OutletID_file2'].values):
+            # Thêm hàng vào DataFrame kết quả cuối cùng
+            final_result_1 = pd.concat([final_result_1, max_score_row.to_frame().T])
+            
+    list_outlet2_from_danh_sach_1 = final_result_1['OutletID_file2'].tolist()\
+    
+    danh_sach_2 = df[df['OutletID_file1'].isin(outlet1_count[outlet1_count >= 2].index)]
+    danh_sach_2 = danh_sach_2[~danh_sach_2['OutletID_file2'].isin(list_outlet2_from_danh_sach_1)]
+    danh_sach_2['Score_Address'] = danh_sach_2.apply(calc_score_address, axis=1)
+    final_result = pd.DataFrame(columns=danh_sach_2.columns)
+    grouped_outlet1 = danh_sach_2.groupby('OutletID_file1')
+    
+    for outlet_id, group in grouped_outlet1:
+        max_score_row = group.loc[group['Score_Address'].idxmax()]
+        if 'OutletID_file2' not in final_result.columns or \
+           (max_score_row['OutletID_file2'] not in final_result['OutletID_file2'].values and \
+            max_score_row['OutletID_file2'] not in final_result_1['OutletID_file2'].values):
+            final_result = pd.concat([final_result, max_score_row.to_frame().T])
+
+    df = pd.concat([final_result_1, final_result])
+
+    outlet2_count = df['OutletID_file2'].value_counts()
+    danh_sach_3 = df[df['OutletID_file2'].isin(outlet2_count[outlet2_count == 1].index)]
+    final_result_2 = pd.DataFrame(columns=danh_sach_3.columns)
+    grouped_outlet3 = danh_sach_3.groupby('OutletID_file2')
+
+    for outlet_id, group in grouped_outlet3:
+        max_score_row = group.loc[group['Score_Address'].idxmax()]
+        if 'OutletID_file1' not in final_result_2.columns or \
+           (max_score_row['OutletID_file1'] not in final_result_2['OutletID_file1'].values):
+            final_result_2 = pd.concat([final_result_2, max_score_row.to_frame().T])
+                
+    list_outlet2_from_danh_sach_3 = final_result_2['OutletID_file1'].tolist()
+    danh_sach_4 = df[df['OutletID_file2'].isin(outlet2_count[outlet2_count >= 2].index)]
+    danh_sach_4 = danh_sach_4[~danh_sach_4['OutletID_file1'].isin(list_outlet2_from_danh_sach_3)]
+    danh_sach_4['Score_Address'] = danh_sach_4.apply(calc_score_address, axis=1)
+    final_result_4 = pd.DataFrame(columns=danh_sach_4.columns)
+    grouped_outlet4 = danh_sach_4.groupby('OutletID_file2')
+
+    for outlet_id, group in grouped_outlet4:
+        max_score_row = group.loc[group['Score_Address'].idxmax()]
+        if 'OutletID_file1' not in final_result_4.columns or \
+           (max_score_row['OutletID_file1'] not in final_result_4['OutletID_file1'].values and \
+            max_score_row['OutletID_file1'] not in final_result_2['OutletID_file1'].values):
+            final_result_4 = pd.concat([final_result_4, max_score_row.to_frame().T])
+
+    df2 = pd.concat([final_result_2, final_result_4])
+
+    return df, df2
 
 def process_uploaded_files(uploaded_files):
     dataframes = {}
@@ -786,11 +855,25 @@ def main():
 
     # Upload files
     st.header("1. Upload Excel File(s)")
+
+    # Kiểm tra số lượng file đã tải lên
     uploaded_files = st.file_uploader("Upload Excel files", type=["xlsx"], accept_multiple_files=True)
+    
+    # Giới hạn số lượng file upload không quá 2
+    MAX_FILES = 2
+    if uploaded_files and len(uploaded_files) > MAX_FILES:
+        st.warning(f"You can only upload up to {MAX_FILES} files. All uploaded files will be removed.")
+        uploaded_files = None  # Xóa tất cả file đã upload trước đó
+
+    # Hiển thị thông tin về file đã upload
+    if uploaded_files:
+        st.write("Uploaded files:")
+        for uploaded_file in uploaded_files:
+            st.write(uploaded_file.name)
 
     # Display files
     st.header("2. Display Uploaded File(s)")
-    
+
     dataframes = {}
     HVN = None
     Vigo = None
@@ -849,82 +932,127 @@ def main():
             test = xet_phancap(HVN, Province)
             test2 = xet_phancap(Vigo, Province)
 
-            st.text("Đang xử lý Name")
-            HVN = xuly_hvnname(HVN, remove_name)
-            Vigo = xuly_hvnname(Vigo, remove_name_2)
-
-            st.subheader("After Cleaning Name's file 1:")
-            st.dataframe(HVN)
-            st.subheader("After Cleaning Name's file 2:")
-            st.dataframe(Vigo)
-
-            st.text("Đang xử lý Phone")
+            # Danh sách số điện thoại thỏa và không thỏa
             HVN_nophone, Vigo_nophone, HVN_phone_na, HVN_phone_notna, Vigo_phone_na, Vigo_phone_notna = xuly_phone(HVN, Vigo)
             HVN_thoa, HVN_khongthoa, Vigo_thoa, Vigo_khongthoa = tao_danh_sach_thoa_khongthoa(teleco1, teleco2, HVN_phone_notna, Vigo_phone_notna, HVN_nophone, HVN_phone_na, Vigo_nophone, Vigo_phone_na)
 
-            st.subheader("After Cleaning Phone's file 1:")
+            st.subheader("Displaying file 1 after checking phone:")
             st.dataframe(HVN_thoa)
-            st.subheader("After Cleaning Phone's file 2:")
+            
+            st.subheader("Displaying file 2 after checking phone:")
             st.dataframe(Vigo_thoa)
+            
+            # Round 1: 100% mapping phone
             phonenum_map = round1(HVN_thoa, Vigo_thoa)
-
             st.subheader("Displaying round 1:")
             st.dataframe(phonenum_map)
-            
-            # Lọc dat thỏa Round 1
+ 
+            # if phonenum_map.empty:
+            #     print("Rong")
+            # else:
+            #     print("Khong Rong")
+                 
+            # Loại bỏ danh sách đã xét ở round 1
             HVN_r2 = HVN_thoa.loc[lambda df: ~df.OutletID.isin(phonenum_map.OutletID_file1)]
             HVN_r2 = pd.concat([HVN_r2, HVN_khongthoa])
 
             Vigo_r2 = Vigo_thoa.loc[lambda df: ~df.OutletID.isin(phonenum_map.OutletID_file2)]
             Vigo_r2 = pd.concat([Vigo_r2, Vigo_khongthoa])
 
-            # Lấy danh sách HVN round2, danh sách thỏa gồm đầy đủ số nhà và tên đường và danh sách không thỏa do thiếu thông tin
+            # Lấy danh sách round2, danh sách thỏa gồm đầy đủ số nhà và tên đường và danh sách không thỏa do thiếu thông tin
             HVN_r2_thoa, HVN_r2_khonghtoa = loc_hvn_r2(HVN_r2)
-
-            # lấy danh sách Vigo round 2, danh sách thỏa gồm đầy đủ số nhà và tên đường và danh sách không thỏa do thiếu thông tin
-            Vigo_r2 = xuly_toadotrongaddress_vigo(Vigo_r2)
-            vigo_r2_thoa, vigo_r2_khongthoa = loc_vigo_r2(Vigo_r2)
+            vigo = xuly_toadotrongaddress_vigo(Vigo_r2)
+            vigo_r2_thoa, vigo_r2_khongthoa = loc_vigo_r2(vigo)
             
             df1 = xuly_address_hvn(OptionalText, HVN_r2_thoa, text_remove)
             df2 = xuly_address_Vigo(OptionalText, vigo_r2_thoa, text_remove_2)
-
-            # Xử lý address cho hvn và vigo
             df1 = tao_address(df1)
             df2 = tao_address(df2)
 
+            st.subheader("Displaying file 1 after creating address column:")
+            st.dataframe(df1)
+            
+            st.subheader("Displaying file 2 after creating address column:")
+            st.dataframe(df2)
+                        
             # Round 2: 100% address
             matching_addess = round2(df1, df2)
-
             st.subheader("Displaying round 2:")
             st.dataframe(matching_addess)
-
-            # Round 3: location >= 90 và storename = 100 
-            HVN_r3 = df1.loc[lambda df: ~df.OutletID.isin(matching_addess.OutletID_file1)]
-            Vigo_r3 = df2.loc[lambda df: ~df.OutletID.isin(matching_addess.OutletID_file2)]
+            
+            if matching_addess.empty:
+                HVN_r3 = HVN_r2
+                Vigo_r3= Vigo_r2
+            else:  
+                # Lọc data cho round3
+                HVN_r3 = df1.loc[lambda df: ~df.OutletID.isin(matching_addess.OutletID_file1)]
+                Vigo_r3 = df2.loc[lambda df: ~df.OutletID.isin(matching_addess.OutletID_file2)]
             
             HVN_r3 = pd.concat([HVN_r3, HVN_r2_khonghtoa])
             Vigo_r3 = pd.concat([Vigo_r3, vigo_r2_khongthoa])
+   
+            # Xử lý cột name
+            HVN_r3 = xuly_hvnname(HVN_r3, remove_name)
+            Vigo_r3 = xuly_hvnname(Vigo_r3, remove_name_2)
+
+            HVN_r3['clean_Outlet_Name'] = HVN_r3['clean_Outlet_Name'].apply(preprocess_address)
+            Vigo_r3['clean_Outlet_Name'] = Vigo_r3['clean_Outlet_Name'].apply(preprocess_address)
+
+            st.subheader("Displaying file 1 after cleaning name:")
+            st.dataframe(HVN_r3)
+            
+            st.subheader("Displaying file 2 after cleaning name:")
+            st.dataframe(Vigo_r3)
             
             location90storename100 = round3(HVN_r3, Vigo_r3)
             st.subheader("Displaying round 3:")
-            st.dataframe(location90storename100)
+            st.dataframe(location90storename100)       
             
-            # Round 4: mapping location (theo rule 5-10-15-10-15-20) và mapping >= 80 store name.
-            HVN_r4 = HVN_r3.loc[lambda df: ~df.OutletID.isin(location90storename100.OutletID_file1)]
-            Vigo_r4 = Vigo_r3.loc[lambda df: ~df.OutletID.isin(location90storename100.OutletID_file2)]
-
-            storename80 = round4(HVN_r4, Vigo_r4)
-            st.subheader("Displaying round 4:")
-            st.dataframe(storename80)
-
+            if location90storename100.empty:
+                HVN_r4 = HVN_r3
+                Vigo_r4= Vigo_r3
+            else:
+                # Lọc data cho round 4
+                HVN_r4 = HVN_r3.loc[lambda df: ~df.OutletID.isin(location90storename100.OutletID_file1)]
+                Vigo_r4 = Vigo_r3.loc[lambda df: ~df.OutletID.isin(location90storename100.OutletID_file2)]
+            # print(HVN_r4.info())
+            # print(Vigo_r4.info())
+            
+            df3 = xuly_address_hvn(OptionalText, HVN_r4, text_remove)
+            df4 = xuly_address_Vigo(OptionalText, Vigo_r4, text_remove_2)
+            df3 = tao_address(df3)
+            df4 = tao_address(df4)
+            
+            st.subheader("Displaying file 1 after crearting address:")
+            st.dataframe(df3)
+            
+            st.subheader("Displaying file 2 after cleaning address:")
+            st.dataframe(df4)  
+            print(df3.info())
+            print(df4.info())      
+            distance_df = round4(df3, df4)
+            print(distance_df.info())
+            if distance_df.empty:
+                danh_sach_1 = pd.DataFrame()
+                danh_sach_2 = pd.DataFrame()
+            else:
+                print(distance_df.info())
+                danh_sach_1, danh_sach_2 = Loc_2File(distance_df)
+                st.subheader("Displaying round 4 mathing for file 1:")
+                st.dataframe(danh_sach_1)
+                st.subheader("Displaying round 4 mathing for file 2:")
+                st.dataframe(danh_sach_2)
+                      
             phonenum_map['level'] = 1
             matching_addess['level'] = 2
             location90storename100['level'] = 3
-            storename80['level'] = 4
+            danh_sach_1['level'] = 4.1
+            danh_sach_2['level'] = 4.2
 
             df = pd.concat([phonenum_map, matching_addess])
             df = pd.concat([df, location90storename100])
-            df = pd.concat([df, storename80])
+            df = pd.concat([df, danh_sach_1])
+            df = pd.concat([df, danh_sach_2])
             st.subheader("Summary for 4 rounds:")
             st.dataframe(df)
 
