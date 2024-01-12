@@ -360,9 +360,9 @@ def loc_hvn_r2(HVN_r2):
     HVN_r2['DistrictName'].fillna('', inplace=True)
     HVN_r2['DistrictName'].replace({None: ''}, inplace=True)
     HVN_r2['DistrictName'].replace({'NULL': ''}, inplace=True)
-    HVN_r2['OutletName'].fillna('', inplace=True)
-    HVN_r2['OutletName'].replace({None: ''}, inplace=True)
-    HVN_r2['OutletName'].replace({'NULL': ''}, inplace=True)
+    HVN_r2['OutletName'].fillna('NoName', inplace=True)
+    HVN_r2['OutletName'].replace({None: 'NoName'}, inplace=True)
+    HVN_r2['OutletName'].replace({'NULL': 'NoName'}, inplace=True)
     HVN_r2['CustomerAddress'].fillna('', inplace=True)
     HVN_r2['CustomerAddress'].replace({None: ''}, inplace=True)
     HVN_r2['CustomerAddress'].replace({'NULL': ''}, inplace=True)
@@ -631,11 +631,17 @@ def preprocess_address(address):
     return unidecode(address)
 
 # Tạo cột clean_name
-def xuly_hvnname(HVN, remove_name):
-    HVN['Outlet_Name'] = HVN['OutletName'].str.lower()
-    HVN['Outlet_Name'].fillna('', inplace=True)
-    HVN['Outlet_Name'].replace({None: ''}, inplace=True)
-    HVN['Outlet_Name'].replace({'NULL': ''}, inplace=True)
+def xuly_hvnname(HVN_r3, remove_name):
+    HVN_r3['Outlet_Name'] = HVN_r3['OutletName'].str.lower()
+    HVN_r3['Outlet_Name'].fillna('NoName', inplace=True)
+    HVN_r3['Outlet_Name'].replace({None: 'NoName'}, inplace=True)
+    HVN_r3['Outlet_Name'].replace({'NULL': 'NoName'}, inplace=True)
+
+    # Tạo DataFrame chứa Outlet_Name là 'NoName'
+    HVN_r3_with_NoName = HVN_r3[HVN_r3['Outlet_Name'] == 'noname']
+
+    # Tạo DataFrame không chứa Outlet_Name là 'NoName'
+    HVN_r3_without_NoName = HVN_r3[HVN_r3['Outlet_Name'] != 'noname']
 
     remove_name['Replace'].fillna('', inplace=True)
     remove_name['Replace'].replace({None: ''}, inplace=True)
@@ -644,10 +650,10 @@ def xuly_hvnname(HVN, remove_name):
     # Convert the "Replace" column in remove_name to strings
     remove_name['Replace'] = remove_name['Replace'].astype(str)
 
-    HVN['clean_Outlet_Name'] = HVN.apply(lambda row: replace_optional_text(row, remove_name), axis=1)
-    HVN['clean_Outlet_Name'] = HVN['clean_Outlet_Name'].apply(lambda x: re.sub(r'\s+', ' ', x))
+    HVN_r3_without_NoName['clean_Outlet_Name'] = HVN_r3_without_NoName.apply(lambda row: replace_optional_text(row, remove_name), axis=1)
+    HVN_r3_without_NoName['clean_Outlet_Name'] = HVN_r3_without_NoName['clean_Outlet_Name'].apply(lambda x: re.sub(r'\s+', ' ', x))
 
-    return HVN
+    return HVN_r3_without_NoName, HVN_r3_with_NoName
 
 def get_geoScore(Data_geo, V_geo):
     geo_dist = (distance.great_circle(Data_geo, V_geo).meters)  # higher = worse score
@@ -992,29 +998,29 @@ def main():
             Vigo_r3 = pd.concat([Vigo_r3, vigo_r2_khongthoa])
    
             # Xử lý cột name
-            HVN_r3 = xuly_hvnname(HVN_r3, remove_name)
-            Vigo_r3 = xuly_hvnname(Vigo_r3, remove_name_2)
+            HVN_r3_without_NoName, HVN_r3_with_NoName = xuly_hvnname(HVN_r3, remove_name)
+            Vigo_r3_without_NoName, Vigo_r3_with_NoName = xuly_hvnname(Vigo_r3, remove_name_2)
 
-            HVN_r3['clean_Outlet_Name'] = HVN_r3['clean_Outlet_Name'].apply(preprocess_address)
-            Vigo_r3['clean_Outlet_Name'] = Vigo_r3['clean_Outlet_Name'].apply(preprocess_address)
+            HVN_r3_without_NoName['clean_Outlet_Name'] = HVN_r3_without_NoName['clean_Outlet_Name'].apply(preprocess_address)
+            Vigo_r3_without_NoName['clean_Outlet_Name'] = Vigo_r3_without_NoName['clean_Outlet_Name'].apply(preprocess_address)
 
             st.subheader("Displaying file 1 after cleaning name:")
-            st.dataframe(HVN_r3)
+            st.dataframe(HVN_r3_without_NoName)
             
             st.subheader("Displaying file 2 after cleaning name:")
-            st.dataframe(Vigo_r3)
+            st.dataframe(Vigo_r3_without_NoName)
             
-            location90storename100 = round3(HVN_r3, Vigo_r3)
+            location90storename100 = round3(HVN_r3_without_NoName, Vigo_r3_without_NoName)
             st.subheader("Displaying round 3:")
             st.dataframe(location90storename100)       
             
             if location90storename100.empty:
-                HVN_r4 = HVN_r3
-                Vigo_r4= Vigo_r3
+                HVN_r4 = HVN_r3_without_NoName
+                Vigo_r4= Vigo_r3_without_NoName
             else:
                 # Lọc data cho round 4
-                HVN_r4 = HVN_r3.loc[lambda df: ~df.OutletID.isin(location90storename100.OutletID_file1)]
-                Vigo_r4 = Vigo_r3.loc[lambda df: ~df.OutletID.isin(location90storename100.OutletID_file2)]
+                HVN_r4 = Vigo_r3_without_NoName.loc[lambda df: ~df.OutletID.isin(location90storename100.OutletID_file1)]
+                Vigo_r4 = Vigo_r3_without_NoName.loc[lambda df: ~df.OutletID.isin(location90storename100.OutletID_file2)]
             # print(HVN_r4.info())
             # print(Vigo_r4.info())
             
