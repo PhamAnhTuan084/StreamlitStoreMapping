@@ -9,6 +9,7 @@ from rapidfuzz import fuzz
 from geopy import distance
 from geopy.distance import geodesic
 from tqdm import tqdm
+from PIL import Image
 warnings.filterwarnings('ignore')
 
 def read_file():
@@ -702,10 +703,75 @@ def calculate_distance(point1, point2):
 def calc_score_name_2(df):
     return fuzz.token_set_ratio(df['clean_Outlet_Name_file1'], df['clean_Outlet_Name_file2'])
 
+# def apply_filter(row):
+#     ward_name = row['WardName']
+#     district_name = row['DistrictName']
+#     province_name = row['ProvinceName']
+#     distance = row['distance']
+
+#     if 'phường' in ward_name and 'thành phố' in district_name and 'tỉnh' in province_name:
+#         return distance <= 15
+#     elif 'xã' in ward_name and 'thành phố' in district_name and 'tỉnh' in province_name:
+#         return distance <= 15
+#     elif 'thị trấn' in ward_name and 'thành phố' in district_name and 'tỉnh' in province_name:
+#         return distance <= 15
+#     elif 'phường' in ward_name and 'huyện' in district_name and 'tỉnh' in province_name:
+#         return distance <= 20
+#     elif 'xã' in ward_name and 'huyện' in district_name and 'tỉnh' in province_name:
+#         return distance <= 20
+#     elif 'thị trấn' in ward_name and 'huyện' in district_name and 'tỉnh' in province_name:
+#         return distance <= 20
+#     elif 'phường' in ward_name and 'thị xã' in district_name and 'tỉnh' in province_name:
+#         return distance <= 20
+#     elif 'xã' in ward_name and 'thị xã' in district_name and 'tỉnh' in province_name:
+#         return distance <= 20
+#     elif 'xã' in ward_name and 'huyện' in district_name and 'thành phố' in province_name:
+#         return distance <= 15
+#     elif 'phường' in ward_name and 'quận' in district_name and 'thành phố' in province_name:
+#         return distance <= 10
+#     elif 'xã' in ward_name and 'huyện' in district_name and 'thành phố' in province_name:
+#         return distance <= 10
+#     elif 'thị trấn' in ward_name and 'huyện' in district_name and 'thành phố' in province_name:
+#         return distance <= 15
+#     elif 'phường' in ward_name and 'thành phố' in district_name and 'thành phố' in province_name:
+#         return distance <= 10
+#     elif 'phường' in ward_name and 'thị xã' in district_name and 'thành phố' in province_name:
+#         return distance <= 15
+#     elif 'xã' in ward_name and 'thị xã' in district_name and 'thành phố' in province_name:
+#         return distance <= 15   
+#     elif 'xã' in ward_name and 'huyện' in district_name and 'city' in province_name:
+#         return distance <= 15
+#     elif 'phường' in ward_name and 'quận' in district_name and 'city' in province_name:
+#         return distance <= 10
+#     elif 'xã' in ward_name and 'huyện' in district_name and 'city' in province_name:
+#         return distance <= 15
+#     elif 'thị trấn' in ward_name and 'huyện' in district_name and 'city' in province_name:
+#         return distance <= 15
+#     elif 'phường' in ward_name and 'thành phố' in district_name and 'city' in province_name:
+#         return distance <= 10
+#     elif 'phường' in ward_name and 'thị xã' in district_name and 'city' in province_name:
+#         return distance <= 15
+#     elif 'xã' in ward_name and 'thị xã' in district_name and 'city' in province_name:
+#         return distance <= 15    
+#     else:
+#         return True
+    
+# def round4(HVN_r4, Vigo_r4):
+#     merged_df = pd.merge(HVN_r4, Vigo_r4, on=['ProvinceName', 'DistrictName', 'WardName'], how='inner', suffixes=('_file1', '_file2'))
+#     if merged_df.empty:
+#         storename80 = merged_df
+#     else:   
+#         merged_df['distance'] = merged_df.apply(lambda row: calculate_distance((row['Latitude_file1'], row['Longitude_file1']),
+#                                                                     (row['Latitude_file2'], row['Longitude_file2'])), axis=1) 
+#         filtered_result = merged_df[merged_df.apply(apply_filter, axis=1)]
+#         filtered_result['Score_Name_2'] = filtered_result.apply(calc_score_name_2, axis=1)
+#         storename80 = filtered_result.loc[filtered_result['Score_Name_2'] >= 80]
+#     return storename80
+
 def apply_filter(row):
-    ward_name = row['WardName']
-    district_name = row['DistrictName']
-    province_name = row['ProvinceName']
+    ward_name = row['WardName_file1']
+    district_name = row['DistrictName_file1']
+    province_name = row['ProvinceName_file1']
     distance = row['distance']
 
     if 'phường' in ward_name and 'thành phố' in district_name and 'tỉnh' in province_name:
@@ -754,9 +820,36 @@ def apply_filter(row):
         return distance <= 15    
     else:
         return True
-    
+
 def round4(HVN_r4, Vigo_r4):
-    merged_df = pd.merge(HVN_r4, Vigo_r4, on=['ProvinceName', 'DistrictName', 'WardName'], how='inner', suffixes=('_file1', '_file2'))
+    # Tạo danh sách để lưu trữ dòng dữ liệu khớp
+    result_rows = []
+
+    # Matching cho DataFrame thứ nhất (df1)
+    for index1, row1 in HVN_r4.iterrows():
+        match_found = False
+        for index2, row2 in Vigo_r4.iterrows():
+            if (
+                row1['ProvinceName'] == row2['ProvinceName'] and
+                row1['DistrictName'] == row2['DistrictName'] and
+                row1['WardName'] == row2['WardName']
+            ):
+                result_rows.append({
+                    f"{col}_file1": row1[col] for col in HVN_r4.columns
+                })
+                result_rows[-1].update({
+                    f"{col}_file2": row2[col] for col in Vigo_r4.columns
+                })
+                match_found = True
+                break
+
+        if not match_found:
+            # Nếu không tìm thấy match, bạn có thể xử lý theo ý của mình
+            pass
+
+    # Tạo DataFrame kết quả từ danh sách
+    merged_df = pd.DataFrame(result_rows)
+
     if merged_df.empty:
         storename80 = merged_df
     else:   
@@ -764,71 +857,218 @@ def round4(HVN_r4, Vigo_r4):
                                                                     (row['Latitude_file2'], row['Longitude_file2'])), axis=1) 
         filtered_result = merged_df[merged_df.apply(apply_filter, axis=1)]
         filtered_result['Score_Name_2'] = filtered_result.apply(calc_score_name_2, axis=1)
-        storename80 = filtered_result.loc[filtered_result['Score_Name_2'] >= 80]   
+        storename80 = filtered_result.loc[filtered_result['Score_Name_2'] >= 80]
     return storename80
 
 def calc_score_address(df):
     return fuzz.token_set_ratio(df['Address_file1'], df['Address_file2'])
 
+# def Loc_2File(df):
+#     outlet1_count = df['OutletID_file1'].value_counts()
+
+#     # Danh sách thứ 1 - Chỉ chứa OutletID_file1 xuất hiện 1 lần
+#     danh_sach_1 = df[df['OutletID_file1'].isin(outlet1_count[outlet1_count == 1].index)]
+    
+#     # Tính toán 'Score_Address'
+#     danh_sach_1['Score_Address'] = danh_sach_1.apply(calc_score_address, axis=1)
+
+#     # Tạo DataFrame mới để lưu kết quả cuối cùng
+#     final_result_1 = pd.DataFrame(columns=danh_sach_1.columns)
+    
+#     # Groupby theo 'OutletID_file1'
+#     grouped_outlet1 = danh_sach_1.groupby('OutletID_file1')
+    
+#     # Duyệt qua từng nhóm
+#     for outlet_id, group in grouped_outlet1:
+#         # Lấy hàng có điểm địa chỉ lớn nhất trong nhóm
+#         max_score_row = group.loc[group['Score_Address'].idxmax()]
+
+#         # Kiểm tra xem 'OutletID_file2' đã xét trước đó chưa
+#         if 'OutletID_file2' not in final_result_1.columns or \
+#            (max_score_row['OutletID_file2'] not in final_result_1['OutletID_file2'].values):
+#             # Thêm hàng vào DataFrame kết quả cuối cùng
+#             final_result_1 = pd.concat([final_result_1, max_score_row.to_frame().T])
+                
+#     # Lọc ra danh sách 'OutletID_file2' từ danh_sach_1
+#     list_outlet2_from_danh_sach_1 = final_result_1['OutletID_file2'].tolist()
+
+#     # Danh sách thứ 2 - Chứa những OutletID_file1 xuất hiện >= 2 lần
+#     danh_sach_2 = df[df['OutletID_file1'].isin(outlet1_count[outlet1_count >= 2].index)]
+
+#     # Loại bỏ những dòng có 'OutletID_file2' xuất hiện trong danh_sach_1
+#     danh_sach_2 = danh_sach_2[~danh_sach_2['OutletID_file2'].isin(list_outlet2_from_danh_sach_1)]
+
+#     # Tính toán 'Score_Address'
+#     danh_sach_2['Score_Address'] = danh_sach_2.apply(calc_score_address, axis=1)
+
+#     # Tạo DataFrame mới để lưu kết quả cuối cùng
+#     final_result = pd.DataFrame(columns=danh_sach_2.columns)
+
+#     # Groupby theo 'OutletID_file1'
+#     grouped_outlet1 = danh_sach_2.groupby('OutletID_file1')
+
+#     # Duyệt qua từng nhóm
+#     for outlet_id, group in grouped_outlet1:
+#         # Lấy hàng có điểm địa chỉ lớn nhất trong nhóm
+#         max_score_row = group.loc[group['Score_Address'].idxmax()]
+
+#         # Kiểm tra xem 'OutletID_file2' đã xét trước đó chưa và không trùng với danh_sach_1
+#         if 'OutletID_file2' not in final_result.columns or \
+#            (max_score_row['OutletID_file2'] not in final_result['OutletID_file2'].values and \
+#             max_score_row['OutletID_file2'] not in final_result_1['OutletID_file2'].values):
+#             # Thêm hàng vào DataFrame kết quả cuối cùng
+#             final_result = pd.concat([final_result, max_score_row.to_frame().T])
+
+#     # Kết hợp danh_sach_1 và final_result để có kết quả cuối cùng
+#     df = pd.concat([final_result_1, final_result])
+    
+    
+#     outlet2_count = df['OutletID_file2'].value_counts()
+
+#     # Danh sách thứ 3 - Chỉ chứa OutletID_file1 xuất hiện 1 lần
+#     danh_sach_3 = df[df['OutletID_file2'].isin(outlet2_count[outlet2_count == 1].index)]
+    
+#     # Tính toán 'Score_Address'
+#     danh_sach_3['Score_Address'] = danh_sach_3.apply(calc_score_address, axis=1)
+
+#     # Tạo DataFrame mới để lưu kết quả cuối cùng
+#     final_result_2 = pd.DataFrame(columns=danh_sach_3.columns)
+    
+#     # Groupby theo 'OutletID_file1'
+#     grouped_outlet3 = danh_sach_3.groupby('OutletID_file2')
+    
+#     # Duyệt qua từng nhóm
+#     for outlet_id, group in grouped_outlet3:
+#         # Lấy hàng có điểm địa chỉ lớn nhất trong nhóm
+#         max_score_row = group.loc[group['Score_Address'].idxmax()]
+
+#         # Kiểm tra xem 'OutletID_file2' đã xét trước đó chưa
+#         if 'OutletID_file1' not in final_result_2.columns or \
+#            (max_score_row['OutletID_file1'] not in final_result_2['OutletID_file1'].values):
+#             # Thêm hàng vào DataFrame kết quả cuối cùng
+#             final_result_2 = pd.concat([final_result_2, max_score_row.to_frame().T])
+                
+#     # Lọc ra danh sách 'OutletID_file1' từ danh_sach_3
+#     list_outlet2_from_danh_sach_3 = final_result_2['OutletID_file1'].tolist()
+
+#     # Danh sách thứ 2 - Chứa những OutletID_file1 xuất hiện >= 2 lần
+#     danh_sach_4 = df[df['OutletID_file2'].isin(outlet2_count[outlet2_count >= 2].index)]
+
+#     # Loại bỏ những dòng có 'OutletID_file2' xuất hiện trong danh_sach_1
+#     danh_sach_4 = danh_sach_4[~danh_sach_4['OutletID_file1'].isin(list_outlet2_from_danh_sach_3)]
+
+#     # Tính toán 'Score_Address'
+#     danh_sach_4['Score_Address'] = danh_sach_4.apply(calc_score_address, axis=1)
+
+#     # Tạo DataFrame mới để lưu kết quả cuối cùng
+#     final_result_4 = pd.DataFrame(columns=danh_sach_4.columns)
+
+#     # Groupby theo 'OutletID_file1'
+#     grouped_outlet4 = danh_sach_4.groupby('OutletID_file2')
+
+#     # Duyệt qua từng nhóm
+#     for outlet_id, group in grouped_outlet4:
+#         # Lấy hàng có điểm địa chỉ lớn nhất trong nhóm
+#         max_score_row = group.loc[group['Score_Address'].idxmax()]
+
+#         # Kiểm tra xem 'OutletID_file2' đã xét trước đó chưa và không trùng với danh_sach_1
+#         if 'OutletID_file1' not in final_result_4.columns or \
+#            (max_score_row['OutletID_file1'] not in final_result_4['OutletID_file1'].values and \
+#             max_score_row['OutletID_file1'] not in final_result_2['OutletID_file1'].values):
+#             # Thêm hàng vào DataFrame kết quả cuối cùng
+#             final_result_4 = pd.concat([final_result_4, max_score_row.to_frame().T])
+
+#     # Kết hợp danh_sach_1 và final_result để có kết quả cuối cùng
+#     df2 = pd.concat([final_result_2, final_result_4])
+
+#     return df, df2
+
+# def Loc_2File(df):
+#     outlet1_count = df['OutletID_file1'].value_counts()
+
+#     # Danh sách thứ 1 - Chỉ chứa OutletID_file1 xuất hiện 1 lần
+#     danh_sach_1 = df[df['OutletID_file1'].isin(outlet1_count[outlet1_count == 1].index)]
+    
+#     # Tính toán 'Score_Address'
+#     danh_sach_1['Score_Address'] = danh_sach_1.apply(calc_score_address, axis=1)
+
+#     # Tạo DataFrame mới để lưu kết quả cuối cùng
+#     final_result_1 = pd.DataFrame(columns=danh_sach_1.columns)
+    
+#     # Groupby theo 'OutletID_file1'
+#     grouped_outlet1 = danh_sach_1.groupby('OutletID_file1')
+    
+#     # Duyệt qua từng nhóm
+#     for outlet_id, group in grouped_outlet1:
+#         # Lấy hàng có điểm địa chỉ lớn nhất trong nhóm
+#         max_score_row = group.loc[group['Score_Address'].idxmax()]
+
+#         # Kiểm tra xem 'OutletID_file2' đã xét trước đó chưa
+#         if 'OutletID_file2' not in final_result_1.columns or \
+#            (max_score_row['OutletID_file2'] not in final_result_1['OutletID_file2'].values):
+#             # Thêm hàng vào DataFrame kết quả cuối cùng
+#             final_result_1 = pd.concat([final_result_1, max_score_row.to_frame().T])
+                
+#     # Lọc ra danh sách 'OutletID_file2' từ danh_sach_1
+#     list_outlet2_from_danh_sach_1 = final_result_1['OutletID_file2'].tolist()
+
+#     # Danh sách thứ 2 - Chứa những OutletID_file1 xuất hiện >= 2 lần
+#     danh_sach_2 = df[df['OutletID_file1'].isin(outlet1_count[outlet1_count >= 2].index)]
+
+#     # Loại bỏ những dòng có 'OutletID_file2' xuất hiện trong danh_sach_1
+#     danh_sach_2 = danh_sach_2[~danh_sach_2['OutletID_file2'].isin(list_outlet2_from_danh_sach_1)]
+
+#     # Tính toán 'Score_Address'
+#     danh_sach_2['Score_Address'] = danh_sach_2.apply(calc_score_address, axis=1)
+
+#     # Tạo DataFrame mới để lưu kết quả cuối cùng
+#     final_result = pd.DataFrame(columns=danh_sach_2.columns)
+
+#     # Groupby theo 'OutletID_file1'
+#     grouped_outlet1 = danh_sach_2.groupby('OutletID_file1')
+
+#     # Duyệt qua từng nhóm
+#     for outlet_id, group in grouped_outlet1:
+#         # Lấy hàng có điểm địa chỉ lớn nhất trong nhóm
+#         max_score_row = group.loc[group['Score_Address'].idxmax()]
+
+#         # Kiểm tra xem 'OutletID_file2' đã xét trước đó chưa và không trùng với danh_sach_1
+#         if 'OutletID_file2' not in final_result.columns or \
+#            (max_score_row['OutletID_file2'] not in final_result['OutletID_file2'].values and \
+#             max_score_row['OutletID_file2'] not in final_result_1['OutletID_file2'].values):
+#             # Thêm hàng vào DataFrame kết quả cuối cùng
+#             final_result = pd.concat([final_result, max_score_row.to_frame().T])
+
+#     # Kết hợp danh_sach_1 và final_result để có kết quả cuối cùng
+#     df = pd.concat([final_result_1, final_result])
+    
+#     return df
+
 def Loc_2File(df):
-    outlet1_count = df['OutletID_file1'].value_counts()
-    danh_sach_1 = df[df['OutletID_file1'].isin(outlet1_count[outlet1_count == 1].index)]
-    danh_sach_1['Score_Address'] = danh_sach_1.apply(calc_score_address, axis=1)
-    final_result_1 = pd.DataFrame(columns=danh_sach_1.columns)
-    grouped_outlet1 = danh_sach_1.groupby('OutletID_file1')
-    
+    # Tính toán 'Score_Address'
+    df['Score_Address'] = df.apply(calc_score_address, axis=1)
+
+    # Sắp xếp DataFrame theo 'Score_Address' giảm dần
+    df = df.sort_values(by='Score_Address', ascending=False)
+
+    # Tạo DataFrame mới để lưu kết quả cuối cùng
+    final_result = pd.DataFrame(columns=df.columns)
+
+    # Groupby theo 'OutletID_file1'
+    grouped_outlet1 = df.groupby('OutletID_file1')
+
+    # Duyệt qua từng nhóm
     for outlet_id, group in grouped_outlet1:
-        max_score_row = group.loc[group['Score_Address'].idxmax()]
-        if 'OutletID_file2' not in final_result_1.columns or \
-           (max_score_row['OutletID_file2'] not in final_result_1['OutletID_file2'].values):
-            # Thêm hàng vào DataFrame kết quả cuối cùng
-            final_result_1 = pd.concat([final_result_1, max_score_row.to_frame().T])
-            
-    list_outlet2_from_danh_sach_1 = final_result_1['OutletID_file2'].tolist()\
-    
-    danh_sach_2 = df[df['OutletID_file1'].isin(outlet1_count[outlet1_count >= 2].index)]
-    danh_sach_2 = danh_sach_2[~danh_sach_2['OutletID_file2'].isin(list_outlet2_from_danh_sach_1)]
-    danh_sach_2['Score_Address'] = danh_sach_2.apply(calc_score_address, axis=1)
-    final_result = pd.DataFrame(columns=danh_sach_2.columns)
-    grouped_outlet1 = danh_sach_2.groupby('OutletID_file1')
-    
-    for outlet_id, group in grouped_outlet1:
-        max_score_row = group.loc[group['Score_Address'].idxmax()]
+        # Lấy hàng có điểm địa chỉ lớn nhất trong nhóm
+        max_score_row = group.iloc[0]  # Chỉ lấy hàng đầu tiên sau khi sắp xếp
+
+        # Kiểm tra xem 'OutletID_file2' đã xét trước đó chưa và không trùng với final_result
         if 'OutletID_file2' not in final_result.columns or \
-           (max_score_row['OutletID_file2'] not in final_result['OutletID_file2'].values and \
-            max_score_row['OutletID_file2'] not in final_result_1['OutletID_file2'].values):
+           (max_score_row['OutletID_file2'] not in final_result['OutletID_file2'].values):
+            # Thêm hàng vào DataFrame kết quả cuối cùng
             final_result = pd.concat([final_result, max_score_row.to_frame().T])
 
-    df = pd.concat([final_result_1, final_result])
-
-    outlet2_count = df['OutletID_file2'].value_counts()
-    danh_sach_3 = df[df['OutletID_file2'].isin(outlet2_count[outlet2_count == 1].index)]
-    final_result_2 = pd.DataFrame(columns=danh_sach_3.columns)
-    grouped_outlet3 = danh_sach_3.groupby('OutletID_file2')
-
-    for outlet_id, group in grouped_outlet3:
-        max_score_row = group.loc[group['Score_Address'].idxmax()]
-        if 'OutletID_file1' not in final_result_2.columns or \
-           (max_score_row['OutletID_file1'] not in final_result_2['OutletID_file1'].values):
-            final_result_2 = pd.concat([final_result_2, max_score_row.to_frame().T])
-                
-    list_outlet2_from_danh_sach_3 = final_result_2['OutletID_file1'].tolist()
-    danh_sach_4 = df[df['OutletID_file2'].isin(outlet2_count[outlet2_count >= 2].index)]
-    danh_sach_4 = danh_sach_4[~danh_sach_4['OutletID_file1'].isin(list_outlet2_from_danh_sach_3)]
-    danh_sach_4['Score_Address'] = danh_sach_4.apply(calc_score_address, axis=1)
-    final_result_4 = pd.DataFrame(columns=danh_sach_4.columns)
-    grouped_outlet4 = danh_sach_4.groupby('OutletID_file2')
-
-    for outlet_id, group in grouped_outlet4:
-        max_score_row = group.loc[group['Score_Address'].idxmax()]
-        if 'OutletID_file1' not in final_result_4.columns or \
-           (max_score_row['OutletID_file1'] not in final_result_4['OutletID_file1'].values and \
-            max_score_row['OutletID_file1'] not in final_result_2['OutletID_file1'].values):
-            final_result_4 = pd.concat([final_result_4, max_score_row.to_frame().T])
-
-    df2 = pd.concat([final_result_2, final_result_4])
-
-    return df, df2
+    return final_result
 
 def process_uploaded_files(uploaded_files):
     dataframes = {}
@@ -857,7 +1097,16 @@ def process_uploaded_files(uploaded_files):
     return dataframes, HVN, Vigo
 
 def main():
-    st.title("Store Mapping")
+    # Load the image
+    image = Image.open("8134648.png")
+
+    # Resize the image to a smaller size (optional)
+    image = image.resize((50, 50))
+
+    # Display the image in the top-left corner
+    st.image(image, use_column_width=False, width=50)
+
+    st.markdown("<h1 style='text-align: center; font-size: 55px;'>Store Mapping</h1>", unsafe_allow_html=True)
 
     # Upload files
     st.header("1. Upload Excel File(s)")
@@ -950,13 +1199,9 @@ def main():
             
             # Round 1: 100% mapping phone
             phonenum_map = round1(HVN_thoa, Vigo_thoa)
-            st.subheader("Displaying round 1:")
+            
+            st.markdown('<h3 style="display:flex; align-items:center;">&hybull; Displaying round 1:</h3>', unsafe_allow_html=True)
             st.dataframe(phonenum_map)
- 
-            # if phonenum_map.empty:
-            #     print("Rong")
-            # else:
-            #     print("Khong Rong")
                  
             # Loại bỏ danh sách đã xét ở round 1
             HVN_r2 = HVN_thoa.loc[lambda df: ~df.OutletID.isin(phonenum_map.OutletID_file1)]
@@ -983,12 +1228,12 @@ def main():
                         
             # Round 2: 100% address
             matching_addess = round2(df1, df2)
-            st.subheader("Displaying round 2:")
+            st.markdown('<h3 style="display:flex; align-items:center;">&hybull; Displaying round 2:</h3>', unsafe_allow_html=True)
             st.dataframe(matching_addess)
             
             if matching_addess.empty:
-                HVN_r3 = HVN_r2
-                Vigo_r3= Vigo_r2
+                HVN_r3 = df1
+                Vigo_r3= df2
             else:  
                 # Lọc data cho round3
                 HVN_r3 = df1.loc[lambda df: ~df.OutletID.isin(matching_addess.OutletID_file1)]
@@ -1011,7 +1256,7 @@ def main():
             st.dataframe(Vigo_r3_without_NoName)
             
             location90storename100 = round3(HVN_r3_without_NoName, Vigo_r3_without_NoName)
-            st.subheader("Displaying round 3:")
+            st.markdown('<h3 style="display:flex; align-items:center;">&hybull; Displaying round 3:</h3>', unsafe_allow_html=True)
             st.dataframe(location90storename100)       
             
             if location90storename100.empty:
@@ -1032,35 +1277,71 @@ def main():
             st.subheader("Displaying file 1 after crearting address:")
             st.dataframe(df3)
             
-            st.subheader("Displaying file 2 after crearting address:")
+            st.subheader("Displaying file 2 after creating address:")
             st.dataframe(df4)  
-            print(df3.info())
-            print(df4.info())      
+            # print(df3.info())
+            # print(df4.info())      
             distance_df = round4(df3, df4)
+            st.subheader("Displaying file 1 merges file 2 in round 4 with the rule:")
             print(distance_df.info())
+            st.dataframe(distance_df)
+
             if distance_df.empty:
                 danh_sach_1 = pd.DataFrame()
+            else:
+                # print(distance_df.info())
+                danh_sach_1 = Loc_2File(distance_df)
+                st.markdown('<h3 style="display:flex; align-items:center;">&hybull; Displaying round 4 after filtering for file 1:</h3>', unsafe_allow_html=True)
+                st.dataframe(danh_sach_1)
+
+            distance_df_2 = round4(df4, df3)
+            st.subheader("Displaying file 2 merges file 1 in round 4 with the rule:")
+            print(distance_df_2.info())
+            st.dataframe(distance_df_2)
+
+            if distance_df_2.empty:
                 danh_sach_2 = pd.DataFrame()
             else:
-                print(distance_df.info())
-                danh_sach_1, danh_sach_2 = Loc_2File(distance_df)
-                st.subheader("Displaying round 4 mathing for file 1:")
-                st.dataframe(danh_sach_1)
-                st.subheader("Displaying round 4 mathing for file 2:")
+                # print(distance_df.info())
+                danh_sach_2 = Loc_2File(distance_df_2)
+                st.markdown('<h3 style="display:flex; align-items:center;">&hybull; Displaying round 4 after filtering for file 2:</h3>', unsafe_allow_html=True)
                 st.dataframe(danh_sach_2)
-                      
-            phonenum_map['level'] = 1
-            matching_addess['level'] = 2
-            location90storename100['level'] = 3
-            danh_sach_1['level'] = 4.1
-            danh_sach_2['level'] = 4.2
+                     
+            if matching_addess.empty and phonenum_map.empty and location90storename100.empty and danh_sach_1.empty and danh_sach_2.empty:
+                st.text("There are no matching Outlets in all Rounds")
+            else:
+                ## Lọc ra danh sách thỏa cả 4 round
+                phonenum_map['level'] = 1
+                matching_addess['level'] = 2
+                location90storename100['level'] = 3
+                danh_sach_1['level'] = 4.1
+                danh_sach_2['level'] = 4.2
 
-            df = pd.concat([phonenum_map, matching_addess])
-            df = pd.concat([df, location90storename100])
-            df = pd.concat([df, danh_sach_1])
-            df = pd.concat([df, danh_sach_2])
-            st.subheader("Summary for 4 rounds:")
-            st.dataframe(df)
+                df = pd.concat([phonenum_map, matching_addess])
+                df = pd.concat([df, location90storename100])
+                df = pd.concat([df, danh_sach_1])
+                df = pd.concat([df, danh_sach_2])
+                st.markdown('<h3 style="display:flex; align-items:center;">&cir; Summary for 4 rounds:</h3>', unsafe_allow_html=True)
+                st.dataframe(df)
+
+                ## Lọc ra danh sách không thỏa cả 4 round
+                HVN_r5 = df3.loc[lambda df: ~df.OutletID.isin(danh_sach_1.OutletID_file1)]
+                Vigo_r5 = df4.loc[lambda df: ~df.OutletID.isin(danh_sach_2.OutletID_file1)]
+                df2 = pd.concat([HVN_r5, Vigo_r5])
+                df2 = pd.concat([df2, HVN_r3_with_NoName])
+                df2 = pd.concat([df2, Vigo_r3_with_NoName])
+                st.markdown('<h3 style="display:flex; align-items:center;">&cir; List of unsatisfactory Outlets for 4 rounds:</h3>', unsafe_allow_html=True)
+                st.dataframe(df2)
+
+                # Create a layout with two columns
+                left_col, center_col, right_col = st.columns([1, 3, 1])
+
+                # Add horizontal lines to the left and right columns
+                left_col.markdown("------------")
+                right_col.markdown("------------")
+
+                # Add the text to the center column
+                center_col.subheader("The store mapping process is done")
 
 if __name__ == '__main__':
     main()
