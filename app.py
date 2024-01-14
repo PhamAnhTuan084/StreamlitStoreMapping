@@ -1204,11 +1204,17 @@ def main():
             st.dataframe(phonenum_map)
                  
             # Loại bỏ danh sách đã xét ở round 1
-            HVN_r2 = HVN_thoa.loc[lambda df: ~df.OutletID.isin(phonenum_map.OutletID_file1)]
-            HVN_r2 = pd.concat([HVN_r2, HVN_khongthoa])
+            if phonenum_map.empty:
+                HVN_r2 = HVN
+                Vigo_r2= Vigo
+            else:  
+                # Lọc data cho round2 
+                HVN_r2 = HVN_thoa.loc[lambda df: ~df.OutletID.isin(phonenum_map.OutletID_file1)]
+                HVN_r2 = pd.concat([HVN_r2, HVN_khongthoa])
 
-            Vigo_r2 = Vigo_thoa.loc[lambda df: ~df.OutletID.isin(phonenum_map.OutletID_file2)]
-            Vigo_r2 = pd.concat([Vigo_r2, Vigo_khongthoa])
+                Vigo_r2 = Vigo_thoa.loc[lambda df: ~df.OutletID.isin(phonenum_map.OutletID_file2)]
+                Vigo_r2 = pd.concat([Vigo_r2, Vigo_khongthoa])
+
 
             # Lấy danh sách round2, danh sách thỏa gồm đầy đủ số nhà và tên đường và danh sách không thỏa do thiếu thông tin
             HVN_r2_thoa, HVN_r2_khonghtoa = loc_hvn_r2(HVN_r2)
