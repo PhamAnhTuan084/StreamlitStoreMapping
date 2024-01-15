@@ -2451,7 +2451,7 @@ def calc_score_address_2(df):
 
 def Loc_File_2(df):
     # Tính toán 'Score_Address'
-    df['Score_Address'] = df.apply(calc_score_address, axis=1)
+    df['Score_Address'] = df.apply(calc_score_address_2, axis=1)
 
     st.subheader("df before sort:")
     st.dataframe(df)
