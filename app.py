@@ -2356,19 +2356,35 @@ def Loc_2File(df):
     # Tính toán 'Score_Address'
     df['Score_Address'] = df.apply(calc_score_address, axis=1)
 
+    st.subheader("Before sort:")
+    st.dataframe(df)
+
     # Sắp xếp DataFrame theo 'Score_Address' giảm dần
     df = df.sort_values(by='Score_Address', ascending=False)
 
+    st.subheader("Sorted by address score:")
+    st.dataframe(df)
+    
     # Tạo DataFrame mới để lưu kết quả cuối cùng
     final_result = pd.DataFrame(columns=df.columns)
 
-    # Groupby theo 'OutletID_file1'
-    grouped_outlet1 = df.groupby('OutletID_file1')
+    # Lưu lại thứ tự của OutletID_file1 sau khi sắp xếp
+    outlet1_order = df['OutletID_file1'].unique()
 
-    # Duyệt qua từng nhóm
-    for outlet_id, group in grouped_outlet1:
-        # Lấy hàng có điểm địa chỉ lớn nhất trong nhóm
-        max_score_row = group.iloc[0]  # Chỉ lấy hàng đầu tiên sau khi sắp xếp
+    # Groupby theo 'OutletID_file1' với tham số sort=True để giữ nguyên thứ tự
+    grouped_outlet1 = df.groupby('OutletID_file1', sort=True)
+
+    # Duyệt qua từng OutletID_file1 theo thứ tự đã lưu
+    for outlet_id in outlet1_order:
+        # Lấy nhóm tương ứng với OutletID_file1
+        group = grouped_outlet1.get_group(outlet_id)
+
+        # Sắp xếp lại nhóm theo 'Score_Address' giảm dần
+        group = group.sort_values(by='Score_Address', ascending=False)
+
+        # Lấy chỉ mục của hàng có điểm địa chỉ lớn nhất trong nhóm
+        max_score_index = group['Score_Address'].idxmax()
+        max_score_row = df.loc[max_score_index]
 
         # Kiểm tra xem 'OutletID_file2' đã xét trước đó chưa và không trùng với final_result
         if 'OutletID_file2' not in final_result.columns or \
@@ -2435,21 +2451,37 @@ def calc_score_address_2(df):
 
 def Loc_File_2(df):
     # Tính toán 'Score_Address'
-    df['Score_Address'] = df.apply(calc_score_address_2, axis=1)
+    df['Score_Address'] = df.apply(calc_score_address, axis=1)
+
+    st.subheader("df before sort:")
+    st.dataframe(df)
 
     # Sắp xếp DataFrame theo 'Score_Address' giảm dần
     df = df.sort_values(by='Score_Address', ascending=False)
 
+    st.subheader("Sorted by address score:")
+    st.dataframe(df)
+    
     # Tạo DataFrame mới để lưu kết quả cuối cùng
     final_result = pd.DataFrame(columns=df.columns)
 
-    # Groupby theo 'OutletID_file1'
-    grouped_outlet1 = df.groupby('OutletID_1')
+    # Lưu lại thứ tự của OutletID_file1 sau khi sắp xếp
+    outlet1_order = df['OutletID_1'].unique()
 
-    # Duyệt qua từng nhóm
-    for outlet_id, group in grouped_outlet1:
-        # Lấy hàng có điểm địa chỉ lớn nhất trong nhóm
-        max_score_row = group.iloc[0]  # Chỉ lấy hàng đầu tiên sau khi sắp xếp
+    # Groupby theo 'OutletID_file1' với tham số sort=True để giữ nguyên thứ tự
+    grouped_outlet1 = df.groupby('OutletID_1', sort=True)
+
+    # Duyệt qua từng OutletID_file1 theo thứ tự đã lưu
+    for outlet_id in outlet1_order:
+        # Lấy nhóm tương ứng với OutletID_file1
+        group = grouped_outlet1.get_group(outlet_id)
+
+        # Sắp xếp lại nhóm theo 'Score_Address' giảm dần
+        group = group.sort_values(by='Score_Address', ascending=False)
+
+        # Lấy chỉ mục của hàng có điểm địa chỉ lớn nhất trong nhóm
+        max_score_index = group['Score_Address'].idxmax()
+        max_score_row = df.loc[max_score_index]
 
         # Kiểm tra xem 'OutletID_file2' đã xét trước đó chưa và không trùng với final_result
         if 'OutletID_2' not in final_result.columns or \
