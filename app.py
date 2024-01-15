@@ -2759,6 +2759,34 @@ def main():
                 if matching_addess.empty and phonenum_map.empty and location90storename100.empty and danh_sach_1.empty and danh_sach_2.empty:
                     st.text("There are no matching Outlets in all Rounds")
 
+                elif danh_sach_1.empty and danh_sach_2.empty:
+                    # Lọc ra danh sách thỏa cả 4 round
+                    phonenum_map['level'] = 1
+                    matching_addess['level'] = 2
+                    location90storename100['level'] = 3
+
+                    df = pd.concat([phonenum_map, matching_addess])
+                    df = pd.concat([df, location90storename100])
+                    st.markdown('<h3 style="display:flex; align-items:center;">&cir; Summary for 4 rounds:</h3>', unsafe_allow_html=True)
+                    st.dataframe(df)
+
+                    ## Lọc ra danh sách không thỏa cả 4 round
+                    df2 = pd.concat([df3, df4])
+                    df2 = pd.concat([df2, HVN_r3_with_NoName])
+                    df2 = pd.concat([df2, Vigo_r3_with_NoName])
+                    st.markdown('<h3 style="display:flex; align-items:center;">&cir; List of unsatisfactory Outlets for 4 rounds:</h3>', unsafe_allow_html=True)
+                    st.dataframe(df2)
+
+                    # Create a layout with two columns
+                    left_col, center_col, right_col = st.columns([1, 3, 1])
+
+                    # Add horizontal lines to the left and right columns
+                    left_col.markdown("------------")
+                    right_col.markdown("------------")
+
+                    # Add the text to the center column
+                    center_col.subheader("The store mapping process is done")    
+
                 elif danh_sach_1.empty:
                     # Lọc ra danh sách thỏa cả 4 round
                     phonenum_map['level'] = 1
@@ -2808,34 +2836,6 @@ def main():
                     HVN_r5 = df3.loc[lambda df: ~df.OutletID.isin(danh_sach_1.OutletID_file1)]
                     Vigo_r5 = df4.loc[lambda df: ~df.OutletID.isin(danh_sach_1.OutletID_file2)]
                     df2 = pd.concat([HVN_r5, Vigo_r5])
-                    df2 = pd.concat([df2, HVN_r3_with_NoName])
-                    df2 = pd.concat([df2, Vigo_r3_with_NoName])
-                    st.markdown('<h3 style="display:flex; align-items:center;">&cir; List of unsatisfactory Outlets for 4 rounds:</h3>', unsafe_allow_html=True)
-                    st.dataframe(df2)
-
-                    # Create a layout with two columns
-                    left_col, center_col, right_col = st.columns([1, 3, 1])
-
-                    # Add horizontal lines to the left and right columns
-                    left_col.markdown("------------")
-                    right_col.markdown("------------")
-
-                    # Add the text to the center column
-                    center_col.subheader("The store mapping process is done")          
-
-                elif danh_sach_1.empty and danh_sach_2.empty:
-                    # Lọc ra danh sách thỏa cả 4 round
-                    phonenum_map['level'] = 1
-                    matching_addess['level'] = 2
-                    location90storename100['level'] = 3
-
-                    df = pd.concat([phonenum_map, matching_addess])
-                    df = pd.concat([df, location90storename100])
-                    st.markdown('<h3 style="display:flex; align-items:center;">&cir; Summary for 4 rounds:</h3>', unsafe_allow_html=True)
-                    st.dataframe(df)
-
-                    ## Lọc ra danh sách không thỏa cả 4 round
-                    df2 = pd.concat([df3, df4])
                     df2 = pd.concat([df2, HVN_r3_with_NoName])
                     df2 = pd.concat([df2, Vigo_r3_with_NoName])
                     st.markdown('<h3 style="display:flex; align-items:center;">&cir; List of unsatisfactory Outlets for 4 rounds:</h3>', unsafe_allow_html=True)
@@ -3042,6 +3042,7 @@ def main():
                         
                 if matching_addess.empty and phonenum_map.empty and location90storename100.empty and danh_sach_1.empty:
                     st.text("There are no matching Outlets in all Rounds")
+                    
                 elif danh_sach_1.empty:
                     # Lọc ra danh sách thỏa cả 4 round
                     phonenum_map['level'] = 1
