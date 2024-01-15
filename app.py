@@ -2453,7 +2453,7 @@ def Loc_File_2(df):
 
         # Kiểm tra xem 'OutletID_file2' đã xét trước đó chưa và không trùng với final_result
         if 'OutletID_2' not in final_result.columns or \
-           (max_score_row['OutletID_2'] not in final_result['OutletID_file2'].values):
+           (max_score_row['OutletID_2'] not in final_result['OutletID_2'].values):
             # Thêm hàng vào DataFrame kết quả cuối cùng
             final_result = pd.concat([final_result, max_score_row.to_frame().T])
 
