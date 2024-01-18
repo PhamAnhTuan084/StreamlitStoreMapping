@@ -2046,6 +2046,7 @@ def xuly_hvnname(HVN_r3, remove_name):
     HVN_r3['Outlet_Name'].fillna('NoName', inplace=True)
     HVN_r3['Outlet_Name'].replace({None: 'NoName'}, inplace=True)
     HVN_r3['Outlet_Name'].replace({'NULL': 'NoName'}, inplace=True)
+    HVN_r3['Outlet_Name'] = HVN_r3['Outlet_Name'].str.lower()
 
     # Tạo DataFrame chứa Outlet_Name là 'NoName'
     HVN_r3_with_NoName = HVN_r3[HVN_r3['Outlet_Name'] == 'noname']
